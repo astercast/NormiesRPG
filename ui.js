@@ -37,12 +37,8 @@ window.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btn-explore').onclick = () => {
     window.selectedParty = [...party];
     showPanel('overworld');
-    // Reload Phaser game to use new party
-    if (window.phaserGame && window.phaserGame.scene) {
-      window.phaserGame.scene.stop();
-      window.phaserGame.destroy(true);
-    }
-    import('./main.js').then(() => {});
+    // Optionally, you could trigger a scene restart or update party data here if needed
+    // Do NOT reload or re-import main.js; Phaser should only be initialized once
   };
 });
 
