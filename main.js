@@ -1,3 +1,7 @@
+import Phaser from 'phaser';
+import { fetchNormieStats } from './normie-api';
+import { BattleScene } from './battle.js';
+
 // Example generative story/NPCs
 const npcs = [
   { x: 5, y: 5, name: 'Guide', text: [
