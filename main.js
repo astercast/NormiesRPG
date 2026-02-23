@@ -1,6 +1,4 @@
-import Phaser from 'phaser';
-import { fetchNormieStats } from './normie-api';
-import { BattleScene } from './battle.js';
+
 
 // Example generative story/NPCs
 const npcs = [
@@ -65,9 +63,7 @@ function drawNPCs(scene) {
   }
 }
 
-import Phaser from 'phaser';
-import { fetchNormieStats } from './normie-api';
-import { BattleScene } from './battle.js';
+
 
 // Tileset and player sprite asset paths
 const TILESET_KEY = 'tileset';
