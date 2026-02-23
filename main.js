@@ -65,9 +65,14 @@ import Phaser from 'phaser';
 import { fetchNormieStats } from './normie-api';
 import { BattleScene } from './battle.js';
 
+// Tileset and player sprite asset paths
+const TILESET_KEY = 'tileset';
+const PLAYER_KEY = 'player';
+
 const TILE_SIZE = 32;
 const MAP_WIDTH = 20;
 const MAP_HEIGHT = 15;
+const TILESET_COLUMNS = 8; // Number of tiles per row in tileset
 
 // Generative tilemap: 0 = grass, 1 = path, 2 = wall, 3 = tree, 4 = water
 function generateTilemap() {
@@ -113,13 +118,9 @@ let partyStats = [];
 
 
 function preload() {
-  // Dynamic pixel sprite for player (simple pattern, can be replaced with normie data)
-  this.textures.generate('player', { data: [
-    '2222',
-    '2332',
-    '2332',
-    '2222'
-  ], pixelWidth: 8, pixelHeight: 8 });
+  // Load tileset and player sprite
+  this.load.spritesheet(TILESET_KEY, 'assets/tileset.png', { frameWidth: TILE_SIZE, frameHeight: TILE_SIZE });
+  this.load.spritesheet(PLAYER_KEY, 'assets/player.png', { frameWidth: TILE_SIZE, frameHeight: TILE_SIZE });
 }
 
 async function create() {
@@ -129,69 +130,76 @@ async function create() {
   this.questState = this.questState || {
     firstBattle: false,
     hasRare: false,
-    foundLost: false,
-    defeatedBoss: false,
-    hasStrong: false
-  };
-  // Helper to heal party
-  const healParty = () => {
-    partyStats.forEach(n => n.hp = n.maxHp);
-  };
-  this.events.on('update', () => {
-    for (const npc of npcs) {
-      if (Math.abs(playerTile.x - npc.x) + Math.abs(playerTile.y - npc.y) === 1) {
-        let msg = '';
-        if (npc.event) {
-          msg = npc.event(this.questState, healParty) || '';
-        }
-        if (!msg) {
-          if (Array.isArray(npc.text)) {
-            msg = npc.text[0];
-            // Show quest progress
-            if (npc.quest && this.questState[npc.quest]) msg = npc.text[1];
-          } else {
-            msg = npc.text;
+    async function create() {
+      drawNPCs(this);
+      // Show story event if player near NPC
+      this.events.on('update', () => {
+        for (const npc of npcs) {
+          if (Math.abs(playerTile.x - npc.x) + Math.abs(playerTile.y - npc.y) === 1) {
+            let msg = '';
+            if (npc.event) {
+              msg = npc.event(this.questState, healParty) || '';
+            }
+            if (!msg) {
+              if (Array.isArray(npc.text)) {
+                msg = npc.text[0];
+                if (npc.quest && this.questState[npc.quest]) msg = npc.text[1];
+              } else {
+                msg = npc.text;
+              }
+            }
+            if (!this.storyText || this.storyText.text !== `${npc.name}: ${msg}`) {
+              if (this.storyText) this.storyText.destroy();
+              this.storyText = this.add.text(
+                this.cameras.main.width / 2,
+                40,
+                `${npc.name}: ${msg}`,
+                { font: '16px monospace', fill: '#fff', backgroundColor: '#222', padding: { x: 10, y: 6 } }
+              ).setOrigin(0.5);
+            }
+            return;
           }
         }
-        if (!this.storyText || this.storyText.text !== `${npc.name}: ${msg}`) {
-          if (this.storyText) this.storyText.destroy();
-          this.storyText = this.add.text(
-            this.cameras.main.width / 2,
-            40,
-            `${npc.name}: ${msg}`,
-            { font: '16px monospace', fill: '#fff', backgroundColor: '#222', padding: { x: 10, y: 6 } }
-          ).setOrigin(0.5);
+        if (this.storyText) { this.storyText.destroy(); this.storyText = null; }
+      });
+
+      // Draw tilemap using tileset
+      this.tileSprites = [];
+      for (let y = 0; y < MAP_HEIGHT; y++) {
+        for (let x = 0; x < MAP_WIDTH; x++) {
+          const tileType = tilemap[y][x];
+          // Map tileType to frame index: 0=grass, 1=path, 2=wall, 3=tree, 4=water
+          const frame = tileType;
+          const tile = this.add.sprite(x * TILE_SIZE + TILE_SIZE/2, y * TILE_SIZE + TILE_SIZE/2, TILESET_KEY, frame).setOrigin(0.5);
+          this.tileSprites.push(tile);
         }
-        return;
       }
+
+      // Get party from window (set by UI)
+      party = window.selectedParty || [{ id: 1, name: 'Normie #1' }];
+      // Fetch stats for each party member
+      partyStats = [];
+      for (const n of party) {
+        let stats = { hp: 10 };
+        try {
+          stats = await fetchNormieStats(n.id);
+        } catch (e) {}
+        partyStats.push({ ...n, ...stats });
+      }
+
+      // Player sprite (animated)
+      this.anims.create({
+        key: 'walk',
+        frames: this.anims.generateFrameNumbers(PLAYER_KEY, { start: 0, end: 3 }),
+        frameRate: 8,
+        repeat: -1
+      });
+      player = this.add.sprite(playerTile.x * TILE_SIZE + TILE_SIZE/2, playerTile.y * TILE_SIZE + TILE_SIZE/2, PLAYER_KEY, 0);
+      player.play('walk');
+      cursors = this.input.keyboard.createCursorKeys();
+      // HUD text for stats (show first party member)
+      this.statsText = this.add.text(10, 10, `Party: ${party.map(p=>p.name).join(', ')} | HP: ${partyStats[0]?.hp ?? 10}`, { font: '16px monospace', fill: '#fff' }).setScrollFactor?.(0);
     }
-    if (this.storyText) { this.storyText.destroy(); this.storyText = null; }
-  });
-  // Draw tilemap
-  this.tileSprites = [];
-  for (let y = 0; y < MAP_HEIGHT; y++) {
-    for (let x = 0; x < MAP_WIDTH; x++) {
-      let color = 0x7ec850; // grass
-      if (tilemap[y][x] === 1) color = 0xd2b48c; // path
-      if (tilemap[y][x] === 2) color = 0x222222; // wall
-      if (tilemap[y][x] === 3) color = 0x3a5d23; // tree
-      if (tilemap[y][x] === 4) color = 0x4a90e2; // water
-      const tile = this.add.rectangle(x * TILE_SIZE + TILE_SIZE/2, y * TILE_SIZE + TILE_SIZE/2, TILE_SIZE, TILE_SIZE, color).setOrigin(0.5);
-      this.tileSprites.push(tile);
-    }
-  }
-  // Get party from window (set by UI)
-  party = window.selectedParty || [{ id: 1, name: 'Normie #1' }];
-  // Fetch stats for each party member
-  partyStats = [];
-  for (const n of party) {
-    let stats = { hp: 10 };
-    try {
-      stats = await fetchNormieStats(n.id);
-    } catch (e) {}
-    partyStats.push({ ...n, ...stats });
-  }
-  // Player sprite (can be made dynamic per Normie)
   player = this.add.sprite(playerTile.x * TILE_SIZE + TILE_SIZE/2, playerTile.y * TILE_SIZE + TILE_SIZE/2, 'player');
   cursors = this.input.keyboard.createCursorKeys();
   // HUD text for stats (show first party member)
