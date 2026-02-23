@@ -1,7 +1,54 @@
 // Example generative story/NPCs
 const npcs = [
-  { x: 5, y: 5, name: 'Guide', text: 'Welcome to the Normies world! Explore and find your destiny.' },
-  { x: 15, y: 10, name: 'Merchant', text: 'Find treasures and beware of wild enemies!' }
+  { x: 5, y: 5, name: 'Guide', text: [
+    'Welcome to the Normies world! Explore and find your destiny.',
+    'Talk to the Merchant for supplies and the Scholar for wisdom.',
+    'Return to me after your first battle.'
+  ], event: (state) => { if (state.firstBattle) return 'You look stronger already!'; } },
+  { x: 15, y: 10, name: 'Merchant', text: [
+    'Find treasures and beware of wild enemies!',
+    'If you bring me a rare Normie, I will reward you.'
+  ], quest: 'bringRare', event: (state) => {
+    if (state.hasRare) return 'Amazing! Here is your reward: 50 Gold.';
+  } },
+  { x: 10, y: 3, name: 'Scholar', text: [
+    'Legends say a rare Normie appears at night.',
+    'Knowledge is the greatest treasure.'
+  ] },
+  { x: 3, y: 12, name: 'Lost Child', text: [
+    'I lost my Normie friend in the woods. Can you help?',
+    'Thank you for finding my friend!'
+  ], quest: 'findLost', event: (state) => {
+    if (state.foundLost) return 'You are a true hero!';
+  } },
+  { x: 18, y: 13, name: 'Old Warrior', text: [
+    'I once fought the Rugpuller. Stay strong, young one.',
+    'If you defeat the Rugpuller, come tell me.'
+  ], quest: 'defeatBoss', event: (state) => {
+    if (state.defeatedBoss) return 'You have the heart of a champion!';
+  } },
+  { x: 8, y: 8, name: 'Poet', text: [
+    'Every step is a new verse in your story.',
+    'Write your legend with courage.'
+  ] },
+  { x: 17, y: 2, name: 'Inventor', text: [
+    'I am building a device to track Normie stats in real time.',
+    'Bring me a Normie with over 100 HP!'
+  ], quest: 'bringStrong', event: (state) => {
+    if (state.hasStrong) return 'Incredible! My invention is complete.';
+  } },
+  { x: 2, y: 2, name: 'Hermit', text: [
+    'The world changes every time you enter. Nothing is ever the same.',
+    'Embrace the unknown.'
+  ] },
+  { x: 12, y: 13, name: 'Healer', text: [
+    'If your Normies are hurt, come to me for help.',
+    'Your party is healed!'
+  ], event: (state, healParty) => { healParty(); return 'Your party is healed!'; } },
+  { x: 6, y: 10, name: 'Storyteller', text: [
+    'Long ago, a hero united all Normies. Will you be next?',
+    'Your journey is just beginning.'
+  ] }
 ];
 function drawNPCs(scene) {
   if (!scene.npcSprites) scene.npcSprites = [];
@@ -10,12 +57,13 @@ function drawNPCs(scene) {
   for (const npc of npcs) {
     const sprite = scene.add.rectangle(npc.x * TILE_SIZE + TILE_SIZE/2, npc.y * TILE_SIZE + TILE_SIZE/2, TILE_SIZE * 0.8, TILE_SIZE * 0.8, 0xffe066).setOrigin(0.5);
     scene.npcSprites.push(sprite);
-    scene.add.text(npc.x * TILE_SIZE + TILE_SIZE/2, npc.y * TILE_SIZE + TILE_SIZE/2 - 18, npc.name, { font: '12px monospace', fill: '#222' }).setOrigin(0.5);
+    scene.add.text(npc.x * TILE_SIZE + TILE_SIZE/2, npc.y * TILE_SIZE + TILE_SIZE/2 - 18, npc.name, { font: '12px monospace', fill: '#222', backgroundColor: '#fff', padding: { x: 2, y: 1 } }).setOrigin(0.5);
   }
 }
 
 import Phaser from 'phaser';
 import { fetchNormieStats } from './normie-api';
+import { BattleScene } from './battle.js';
 
 const TILE_SIZE = 32;
 const MAP_WIDTH = 20;
@@ -45,11 +93,15 @@ const config = {
   height: TILE_SIZE * MAP_HEIGHT,
   parent: 'game-container',
   pixelArt: true,
-  scene: {
-    preload,
-    create,
-    update
-  }
+  scene: [
+    {
+      key: 'default',
+      preload,
+      create,
+      update
+    },
+    BattleScene
+  ]
 };
 
 let player, cursors, canMove = true;
@@ -73,22 +125,48 @@ function preload() {
 async function create() {
     drawNPCs(this);
     // Show story event if player near NPC
-    this.events.on('update', () => {
-      for (const npc of npcs) {
-        if (Math.abs(playerTile.x - npc.x) + Math.abs(playerTile.y - npc.y) === 1) {
-          if (!this.storyText) {
-            this.storyText = this.add.text(
-              this.cameras.main.width / 2,
-              40,
-              `${npc.name}: ${npc.text}`,
-              { font: '16px monospace', fill: '#fff', backgroundColor: '#222', padding: { x: 10, y: 6 } }
-            ).setOrigin(0.5);
-          }
-          return;
+  // Quest state
+  this.questState = this.questState || {
+    firstBattle: false,
+    hasRare: false,
+    foundLost: false,
+    defeatedBoss: false,
+    hasStrong: false
+  };
+  // Helper to heal party
+  const healParty = () => {
+    partyStats.forEach(n => n.hp = n.maxHp);
+  };
+  this.events.on('update', () => {
+    for (const npc of npcs) {
+      if (Math.abs(playerTile.x - npc.x) + Math.abs(playerTile.y - npc.y) === 1) {
+        let msg = '';
+        if (npc.event) {
+          msg = npc.event(this.questState, healParty) || '';
         }
+        if (!msg) {
+          if (Array.isArray(npc.text)) {
+            msg = npc.text[0];
+            // Show quest progress
+            if (npc.quest && this.questState[npc.quest]) msg = npc.text[1];
+          } else {
+            msg = npc.text;
+          }
+        }
+        if (!this.storyText || this.storyText.text !== `${npc.name}: ${msg}`) {
+          if (this.storyText) this.storyText.destroy();
+          this.storyText = this.add.text(
+            this.cameras.main.width / 2,
+            40,
+            `${npc.name}: ${msg}`,
+            { font: '16px monospace', fill: '#fff', backgroundColor: '#222', padding: { x: 10, y: 6 } }
+          ).setOrigin(0.5);
+        }
+        return;
       }
-      if (this.storyText) { this.storyText.destroy(); this.storyText = null; }
-    });
+    }
+    if (this.storyText) { this.storyText.destroy(); this.storyText = null; }
+  });
   // Draw tilemap
   this.tileSprites = [];
   for (let y = 0; y < MAP_HEIGHT; y++) {
@@ -151,16 +229,17 @@ function update() {
 
 function triggerEncounter(scene) {
   if (encounterText) encounterText.destroy();
-  // Transition to battle scene (placeholder)
+  // Pick a random enemy for demo
+  const enemy = { name: 'Wild Normie', hp: 30 + Math.floor(Math.random()*20), maxHp: 30 + Math.floor(Math.random()*20), atk: 8 + Math.floor(Math.random()*4) };
   encounterText = scene.add.text(
     scene.cameras.main.width / 2,
     scene.cameras.main.height / 2,
-    'A wild enemy appears!\n(Transitioning to battle...)',
+    'A wild enemy appears!',
     { font: '20px monospace', fill: '#fff', backgroundColor: '#000', padding: { x: 12, y: 8 }, align: 'center' }
   ).setOrigin(0.5);
-  scene.time.delayedCall(1200, () => {
+  scene.time.delayedCall(1000, () => {
     if (encounterText) { encounterText.destroy(); encounterText = null; }
-    // TODO: Actually switch to battle scene and pass party/enemy info
+    scene.scene.start('BattleScene', { party: partyStats, enemy });
   });
 }
 
