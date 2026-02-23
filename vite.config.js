@@ -2,8 +2,13 @@ import { defineConfig } from 'vite';
 
 export default defineConfig({
   root: '.',
+  build: {
+    outDir: 'dist',
+    emptyOutDir: true,
+  },
   server: {
     open: '/index.html',
-    port: 3000,  // Added a new port configuration
+    port: 3000,
   },
+  base: './',
 });
