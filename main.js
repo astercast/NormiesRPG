@@ -200,7 +200,7 @@ async function create() {
 
 
 function update() {
-  if (!canMove) return;
+  if (!canMove || !cursors) return;
   let moved = false;
   let nx = playerTile.x, ny = playerTile.y;
   if (Phaser.Input.Keyboard.JustDown(cursors.left))  nx--;

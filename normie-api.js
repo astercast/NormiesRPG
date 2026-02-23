@@ -1,12 +1,12 @@
-// Fetches normie stats from normies.art
+// Fetches normie stats from Normies API (CORS-safe)
 export async function fetchNormieStats(normieId) {
-  const url = `https://www.normies.art/normiecard?id=${normieId}`;
+  const url = `https://api.normies.art/normie/${normieId}/metadata`;
   const res = await fetch(url);
   if (!res.ok) throw new Error('Failed to fetch normie stats');
-  const html = await res.text();
-  // Parse stats from HTML (simple regex for demo)
-  const hpMatch = html.match(/HP:\s*(\d+)/);
+  const data = await res.json();
+  // Use Pixel Count as HP for demo
+  const hpAttr = data.attributes.find(a => a.trait_type === 'Pixel Count');
   return {
-    hp: hpMatch ? parseInt(hpMatch[1], 10) : 10 // fallback
+    hp: hpAttr ? parseInt(hpAttr.value, 10) : 10
   };
 }
