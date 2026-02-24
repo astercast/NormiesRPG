@@ -5,14 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Normies RPG</title>
   <link rel="icon" href="https://www.normies.art/favicon.ico">
-  <meta name="theme-color" content="#e3e5e4">
-  <meta name="description" content="Normies RPG — on-chain pixel adventure">
+  <meta name="theme-color" content="#ffffff">
   <link rel="stylesheet" href="./style.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js"></script>
 </head>
 <body>
-  <!-- Wallet Connect Panel -->
-  <div id="panel-connect" class="panel active" tabindex="0">
+
+  <!-- CONNECT -->
+  <div id="panel-connect" class="panel active">
     <div class="inner">
       <h1 class="title">NORMIES<br>RPG</h1>
       <hr>
@@ -28,14 +28,14 @@
     </div>
   </div>
 
-  <!-- Party Selector Panel -->
-  <div id="panel-party" class="panel" tabindex="0">
-    <div class="inner">
+  <!-- PARTY SELECT -->
+  <div id="panel-party" class="panel">
+    <div class="inner wide">
       <button class="nav-back" id="btn-back-connect">← Back</button>
       <div class="party-header">
         <div>
           <p class="label">Party selection</p>
-          <h2 style="font-size:22px;font-weight:700;letter-spacing:-.02em">YOUR PARTY</h2>
+          <h2 class="subtitle">YOUR PARTY</h2>
         </div>
         <div style="text-align:right">
           <span id="demo-badge" class="demo-badge">DEMO</span>
@@ -47,7 +47,7 @@
       <div class="party-row" id="party-slots"></div>
       <hr class="hr-light">
       <div class="collection-label">
-        <span class="label">Your Normies <span id="col-count" style="color:#000"></span></span>
+        <span class="label">Your Normies <span id="col-count"></span></span>
         <span id="party-count-label" style="font-size:10px;color:#aaa">0 / 5</span>
       </div>
       <div class="normie-grid" id="normie-grid">
@@ -56,8 +56,97 @@
     </div>
   </div>
 
-  <div id="game-container" tabindex="0"></div>
+  <!-- GAME (Phaser canvas + overlays) -->
+  <div id="game-container" tabindex="0">
+
+    <!-- HUD bar -->
+    <div id="hud">
+      <div id="hud-party"></div>
+      <div id="hud-right">
+        <div class="hud-ctrl">WASD/↑↓←→ move<br>E — interact<br>I — inventory</div>
+        <div>
+          <div class="hud-gold" id="hud-gold">0 G</div>
+          <div style="font-size:8px;color:#aaa;letter-spacing:.1em;margin-top:1px">GOLD</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Zone name -->
+    <div id="zone-label">NORMIE PLAINS</div>
+
+    <!-- NPC dialogue -->
+    <div id="dialogue">
+      <div id="dialogue-name"></div>
+      <div id="dialogue-text"></div>
+      <div id="dialogue-close">[ E or click to dismiss ]</div>
+    </div>
+
+    <!-- INVENTORY overlay -->
+    <div id="panel-inventory">
+      <div class="inv-inner">
+        <button class="nav-back" id="btn-close-inv">← Back to World</button>
+        <p class="label" style="margin-bottom:4px">Inventory</p>
+        <h2 class="subtitle" style="margin-bottom:20px">YOUR ITEMS</h2>
+        <div class="inv-section">
+          <div class="inv-title">Consumables</div>
+          <div id="inv-items"></div>
+        </div>
+        <hr class="hr-light">
+        <div class="inv-section">
+          <div class="inv-title">Party Status</div>
+          <div id="inv-party"></div>
+        </div>
+        <hr class="hr-light">
+        <div class="inv-section">
+          <div class="inv-title">Journal</div>
+          <div id="inv-journal"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- BATTLE overlay -->
+    <div id="panel-battle">
+      <div class="battle-inner">
+
+        <div id="battle-result">
+          <div id="result-title" class="result-title"></div>
+          <div id="result-sub" class="result-sub"></div>
+          <div id="result-gold"></div>
+          <div class="result-actions">
+            <button id="btn-result-world">Return to World</button>
+            <button class="btn-ghost" id="btn-result-party">Party Select</button>
+          </div>
+        </div>
+
+        <div id="battle-main">
+          <div class="battle-top">
+            <div>
+              <div class="wave-label" id="encounter-zone">ENCOUNTER</div>
+              <div class="wave-num" id="wave-num">!</div>
+            </div>
+            <div class="turn-info" id="turn-info">—</div>
+          </div>
+          <div class="arena" id="arena">
+            <div class="arena-inner">
+              <div class="b-party" id="b-party"></div>
+              <div class="b-enemy" id="b-enemy"></div>
+            </div>
+          </div>
+          <div class="battle-log" id="battle-log"></div>
+          <div class="action-row">
+            <div class="action-label" id="action-label">Choose action</div>
+            <button class="act-btn" id="btn-atk">Attack<sub id="atk-lbl"></sub></button>
+            <button class="act-btn btn-ghost" id="btn-skill">Skill<sub id="skill-lbl"></sub></button>
+            <button class="act-btn btn-ghost" id="btn-ult">Ultimate<sub id="ult-lbl"></sub></button>
+            <button class="act-btn btn-ghost" id="btn-pot">Potion<sub id="pot-lbl"></sub></button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div><!-- /game-container -->
+
   <script type="module" src="./main.js"></script>
-  <script type="module" src="./ui.js"></script>
 </body>
 </html>

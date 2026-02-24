@@ -1,252 +1,679 @@
 import Phaser from 'phaser';
-import { fetchNormieStats } from './normie-api';
-import { BattleScene } from './battle.js';
+import { fetchNormieMeta, makeSvgFallback, makeFallback } from './normie-api.js';
+import { connectWallet, loadWalletNormies, loadDemoNormies } from './wallet.js';
+import { startBattle, closeBattle, buildEnemy } from './battle.js';
 
-// Example generative story/NPCs
-const npcs = [
-  { x: 5, y: 5, name: 'Guide', text: [
-    'Welcome to the Normies world! Explore and find your destiny.',
-    'Talk to the Merchant for supplies and the Scholar for wisdom.',
-    'Return to me after your first battle.'
-  ], event: (state) => { if (state.firstBattle) return 'You look stronger already!'; } },
-  { x: 15, y: 10, name: 'Merchant', text: [
-    'Find treasures and beware of wild enemies!',
-    'If you bring me a rare Normie, I will reward you.'
-  ], quest: 'bringRare', event: (state) => {
-    if (state.hasRare) return 'Amazing! Here is your reward: 50 Gold.';
-  } },
-  { x: 10, y: 3, name: 'Scholar', text: [
-    'Legends say a rare Normie appears at night.',
-    'Knowledge is the greatest treasure.'
-  ] },
-  { x: 3, y: 12, name: 'Lost Child', text: [
-    'I lost my Normie friend in the woods. Can you help?',
-    'Thank you for finding my friend!'
-  ], quest: 'findLost', event: (state) => {
-    if (state.foundLost) return 'You are a true hero!';
-  } },
-  { x: 18, y: 13, name: 'Old Warrior', text: [
-    'I once fought the Rugpuller. Stay strong, young one.',
-    'If you defeat the Rugpuller, come tell me.'
-  ], quest: 'defeatBoss', event: (state) => {
-    if (state.defeatedBoss) return 'You have the heart of a champion!';
-  } },
-  { x: 8, y: 8, name: 'Poet', text: [
-    'Every step is a new verse in your story.',
-    'Write your legend with courage.'
-  ] },
-  { x: 17, y: 2, name: 'Inventor', text: [
-    'I am building a device to track Normie stats in real time.',
-    'Bring me a Normie with over 100 HP!'
-  ], quest: 'bringStrong', event: (state) => {
-    if (state.hasStrong) return 'Incredible! My invention is complete.';
-  } },
-  { x: 2, y: 2, name: 'Hermit', text: [
-    'The world changes every time you enter. Nothing is ever the same.',
-    'Embrace the unknown.'
-  ] },
-  { x: 12, y: 13, name: 'Healer', text: [
-    'If your Normies are hurt, come to me for help.',
-    'Your party is healed!'
-  ], event: (state, healParty) => { healParty(); return 'Your party is healed!'; } },
-  { x: 6, y: 10, name: 'Storyteller', text: [
-    'Long ago, a hero united all Normies. Will you be next?',
-    'Your journey is just beginning.'
-  ] }
+// ════════════════════════════════════════════════════════
+// CONSTANTS
+// ════════════════════════════════════════════════════════
+const TILE    = 32;
+const MAP_W   = 40;
+const MAP_H   = 40;
+const MAX_PARTY = 5;
+
+// Tile types
+const T = { GRASS:0, PATH:1, WALL:2, TREE:3, WATER:4, TOWN:5, INN:6, SHOP:7, SIGN:8 };
+
+// Zone definitions
+const ZONES = [
+  { name:'NORMIE PLAINS',  minX:0,  maxX:25, minY:0,  maxY:25, rate:.12, tier:0 },
+  { name:'DARK FOREST',    minX:25, maxX:40, minY:0,  maxY:20, rate:.18, tier:1 },
+  { name:'COIN CAVES',     minX:0,  maxX:20, minY:25, maxY:40, rate:.20, tier:2 },
+  { name:'RUGGED LANDS',   minX:20, maxX:40, minY:25, maxY:40, rate:.22, tier:3 },
 ];
-function drawNPCs(scene) {
-  if (!scene.npcSprites) scene.npcSprites = [];
-  scene.npcSprites.forEach(s => s.destroy());
-  scene.npcSprites = [];
-  for (const npc of npcs) {
-    const sprite = scene.add.rectangle(npc.x * TILE_SIZE + TILE_SIZE/2, npc.y * TILE_SIZE + TILE_SIZE/2, TILE_SIZE * 0.8, TILE_SIZE * 0.8, 0xffe066).setOrigin(0.5);
-    scene.npcSprites.push(sprite);
-    scene.add.text(npc.x * TILE_SIZE + TILE_SIZE/2, npc.y * TILE_SIZE + TILE_SIZE/2 - 18, npc.name, { font: '12px monospace', fill: '#222', backgroundColor: '#fff', padding: { x: 2, y: 1 } }).setOrigin(0.5);
-  }
-}
 
+// NPC definitions
+const NPC_DEFS = [
+  { x:21, y:19, name:'TOWN ELDER',  text:'Welcome, adventurer. The plains hold many secrets. Beware the dark forest to the north-east.' },
+  { x:18, y:21, name:'MERCHANT',    text:'Rare loot awaits in the Coin Caves to the south. Watch your step.' },
+  { x:22, y:20, name:'INNKEEPER',   text:'Rest and restore your party here anytime. (Inn feature coming soon.)' },
+  { x:10, y:20, name:'TRAVELER',    text:'I saw something enormous in the Rugged Lands. South-east. You\'ve been warned.' },
+  { x:20, y:10, name:'SCOUT',       text:'The forest ahead is dense with enemies. Higher level Normies fare better there.' },
+  { x:20, y:30, name:'MINER',       text:'The caves echo with strange sounds. The loot is worth the risk though.' },
+  { x:30, y:20, name:'WANDERER',    text:'Step off the path into tall grass to find wild encounters. Stay on paths to travel safely.' },
+];
 
+// ════════════════════════════════════════════════════════
+// GLOBAL STATE
+// ════════════════════════════════════════════════════════
+const G = {
+  // NFT collection + party
+  collection: [],
+  party:      [],
+  demo:       false,
+  provider:   null,
+  address:    null,
 
-// Tileset and player sprite asset paths
-const TILESET_KEY = 'tileset';
-const PLAYER_KEY = 'player';
+  // Persistent world state
+  world: {
+    gold:     0,
+    potions:  3,
+    steps:    0,
+    battlesWon: 0,
+    journal:  [],
+    px: 20, py: 20,   // player tile position
+    encounterCooldown: 0,
+  },
 
-const TILE_SIZE = 32;
-const MAP_WIDTH = 20;
-const MAP_HEIGHT = 15;
-const TILESET_COLUMNS = 8; // Number of tiles per row in tileset
-
-// Generative tilemap: 0 = grass, 1 = path, 2 = wall, 3 = tree, 4 = water
-function generateTilemap() {
-  const map = [];
-  for (let y = 0; y < MAP_HEIGHT; y++) {
-    const row = [];
-    for (let x = 0; x < MAP_WIDTH; x++) {
-      if (y === 0 || y === MAP_HEIGHT - 1 || x === 0 || x === MAP_WIDTH - 1) row.push(2); // wall
-      else if ((x === 10 && y > 2 && y < 12) || (y === 7 && x > 2 && x < 17)) row.push(1); // path
-      else if (Math.random() < 0.07) row.push(3); // tree
-      else if (Math.random() < 0.03) row.push(4); // water
-      else row.push(0); // grass
-    }
-    map.push(row);
-  }
-  return map;
-}
-let tilemap = generateTilemap();
-
-const config = {
-  type: Phaser.AUTO,
-  width: TILE_SIZE * MAP_WIDTH,
-  height: TILE_SIZE * MAP_HEIGHT,
-  parent: 'game-container',
-  pixelArt: true,
-  scene: [
-    {
-      key: 'default',
-      preload,
-      create,
-      update
-    },
-    BattleScene
-  ]
+  // Phaser game instance
+  game: null,
+  overworldScene: null,
 };
 
-let player, cursors, canMove = true;
-let playerTile = { x: 10, y: 7 };
-let encounterText = null;
-let encounterCooldown = 0;
-let party = [];
-let partyStats = [];
+// ════════════════════════════════════════════════════════
+// MAP GENERATION
+// ════════════════════════════════════════════════════════
+let MAP = null;
 
-
-function preload() {
-  // Load tileset and player sprite
-  this.load.spritesheet(TILESET_KEY, 'assets/tileset.png', { frameWidth: TILE_SIZE, frameHeight: TILE_SIZE });
-  this.load.spritesheet(PLAYER_KEY, 'assets/player.png', { frameWidth: TILE_SIZE, frameHeight: TILE_SIZE });
+function mkRng(seed) {
+  let s = (seed | 0) + 1;
+  return () => { s ^= s << 13; s ^= s >> 17; s ^= s << 5; return (s >>> 0) / 0xffffffff; };
 }
 
-async function create() {
-  drawNPCs(this);
-  // Show story event if player near NPC
-  this.events.on('update', () => {
-    for (const npc of npcs) {
-      if (Math.abs(playerTile.x - npc.x) + Math.abs(playerTile.y - npc.y) === 1) {
-        let msg = '';
-        if (npc.event) {
-          msg = npc.event(this.questState, healParty) || '';
-        }
-        if (!msg) {
-          if (Array.isArray(npc.text)) {
-            msg = npc.text[0];
-            if (npc.quest && this.questState && this.questState[npc.quest]) msg = npc.text[1];
-          } else {
-            msg = npc.text;
-          }
-        }
-        if (!this.storyText || this.storyText.text !== `${npc.name}: ${msg}`) {
-          if (this.storyText) this.storyText.destroy();
-          this.storyText = this.add.text(
-            this.cameras.main.width / 2,
-            40,
-            `${npc.name}: ${msg}`,
-            { font: '16px monospace', fill: '#fff', backgroundColor: '#222', padding: { x: 10, y: 6 } }
-          ).setOrigin(0.5);
-        }
+function generateMap() {
+  const r = mkRng(42);
+  MAP = Array.from({ length: MAP_H }, () => new Array(MAP_W).fill(T.GRASS));
+
+  // Border walls
+  for (let x = 0; x < MAP_W; x++) { MAP[0][x] = T.WALL; MAP[MAP_H-1][x] = T.WALL; }
+  for (let y = 0; y < MAP_H; y++) { MAP[y][0] = T.WALL; MAP[y][MAP_W-1] = T.WALL; }
+
+  // Random trees
+  for (let y = 1; y < MAP_H-1; y++) for (let x = 1; x < MAP_W-1; x++)
+    if (r() < 0.06) MAP[y][x] = T.TREE;
+
+  // Water pools
+  [[8,8,3,2],[30,5,2,3],[5,32,4,2],[32,32,3,3],[28,15,2,2]].forEach(([px,py,pw,ph]) => {
+    for (let dy = 0; dy < ph; dy++) for (let dx = 0; dx < pw; dx++)
+      if (py+dy < MAP_H-1 && px+dx < MAP_W-1) MAP[py+dy][px+dx] = T.WATER;
+  });
+
+  // Paths
+  for (let x = 1; x < MAP_W-1; x++) MAP[20][x] = T.PATH;
+  for (let y = 1; y < MAP_H-1; y++) MAP[y][20] = T.PATH;
+  for (let x = 10; x < 30; x++) MAP[10][x] = T.PATH;
+  for (let x = 5; x < 15; x++)  MAP[30][x] = T.PATH;
+  for (let y = 10; y < 30; y++) MAP[y][10] = T.PATH;
+
+  // Town center
+  for (let dy = -3; dy <= 3; dy++) for (let dx = -3; dx <= 3; dx++)
+    MAP[20+dy][20+dx] = T.TOWN;
+
+  // Buildings
+  [[17,22],[17,23],[18,22],[18,23]].forEach(([y,x]) => MAP[y][x] = T.INN);
+  [[22,17],[22,18],[23,17],[23,18]].forEach(([y,x]) => MAP[y][x] = T.SHOP);
+  MAP[19][20] = T.SIGN;
+  MAP[20][19] = T.SIGN;
+
+  // Dark forest (denser trees top-right)
+  for (let y = 2; y < 18; y++) for (let x = 26; x < 38; x++)
+    if (MAP[y][x] === T.GRASS && r() < 0.25) MAP[y][x] = T.TREE;
+
+  // Coin caves (extra walls bottom-left)
+  for (let y = 26; y < 38; y++) for (let x = 2; x < 18; x++)
+    if (MAP[y][x] === T.GRASS && r() < 0.12) MAP[y][x] = T.WALL;
+
+  // Keep spawn clear
+  for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++)
+    MAP[20+dy][20+dx] = T.TOWN;
+  [[17,22],[17,23],[18,22],[18,23]].forEach(([y,x]) => MAP[y][x] = T.INN);
+  [[22,17],[22,18],[23,17],[23,18]].forEach(([y,x]) => MAP[y][x] = T.SHOP);
+  MAP[19][20] = T.SIGN;
+  MAP[20][19] = T.SIGN;
+}
+
+const WALKABLE = t => t !== T.WALL && t !== T.TREE && t !== T.WATER;
+
+// ════════════════════════════════════════════════════════
+// TILESET GENERATION (canvas → Phaser texture)
+// We generate a 32×32 tile for each tile type programmatically
+// so we never need an external image file
+// ════════════════════════════════════════════════════════
+const TILE_COLORS = {
+  [T.GRASS]: { bg:'#f5f5f5', border:'#e8e8e8' },
+  [T.PATH]:  { bg:'#ebebeb', border:'#d0d0d0' },
+  [T.WALL]:  { bg:'#111111', border:null },
+  [T.TREE]:  { bg:'#1a1a1a', border:null },
+  [T.WATER]: { bg:'#cccccc', border:'#aaaaaa' },
+  [T.TOWN]:  { bg:'#efefef', border:'#cccccc' },
+  [T.INN]:   { bg:'#e0e0e0', border:'#888888' },
+  [T.SHOP]:  { bg:'#e0e0e0', border:'#888888' },
+  [T.SIGN]:  { bg:'#dddddd', border:'#888888' },
+};
+const TILE_EMOJI = {
+  [T.TREE]:  '▲',
+  [T.WATER]: '~',
+  [T.INN]:   'INN',
+  [T.SHOP]:  'SHP',
+  [T.SIGN]:  '!',
+};
+
+function makeTileTexture(scene, type, key) {
+  const cv  = document.createElement('canvas');
+  cv.width  = TILE; cv.height = TILE;
+  const ctx = cv.getContext('2d');
+  const col = TILE_COLORS[type] || { bg:'#fff' };
+  ctx.fillStyle = col.bg;
+  ctx.fillRect(0, 0, TILE, TILE);
+  if (col.border) {
+    ctx.strokeStyle = col.border;
+    ctx.lineWidth = 0.5;
+    ctx.strokeRect(0.5, 0.5, TILE-1, TILE-1);
+  }
+  const lbl = TILE_EMOJI[type];
+  if (lbl) {
+    ctx.fillStyle = (type === T.WALL || type === T.TREE) ? '#fff' : '#444';
+    ctx.font = type === T.INN || type === T.SHOP ? '9px monospace' : '14px monospace';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(lbl, TILE/2, TILE/2);
+  }
+  scene.textures.addCanvas(key, cv);
+}
+
+// Generate a normie-style pixel figure texture for NPCs
+function makeNpcTexture(scene) {
+  const cv = document.createElement('canvas'); cv.width = TILE; cv.height = TILE;
+  const ctx = cv.getContext('2d');
+  ctx.fillStyle = '#ffe066';
+  ctx.fillRect(11, 6, 10, 8);  // head
+  ctx.fillRect(10, 14, 12, 8); // body
+  ctx.fillRect(10, 22, 4, 6);  // left leg
+  ctx.fillRect(18, 22, 4, 6);  // right leg
+  ctx.fillStyle = '#333';
+  ctx.fillRect(13, 9, 2, 2);   // left eye
+  ctx.fillRect(17, 9, 2, 2);   // right eye
+  scene.textures.addCanvas('npc', cv);
+}
+
+// Generate player texture from normie image (or fallback pixel figure)
+function makePlayerTexture(scene, normie) {
+  return new Promise(resolve => {
+    const cv = document.createElement('canvas'); cv.width = TILE; cv.height = TILE;
+    const ctx = cv.getContext('2d');
+
+    const drawFallback = () => {
+      ctx.clearRect(0, 0, TILE, TILE);
+      ctx.fillStyle = '#000';
+      ctx.fillRect(11, 4, 10, 9);  // head
+      ctx.fillRect(10, 13, 12, 9); // body
+      ctx.fillRect(10, 22, 4, 6);  // left leg
+      ctx.fillRect(18, 22, 4, 6);  // right leg
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(12, 7, 2, 2);
+      ctx.fillRect(17, 7, 2, 2);
+      if (scene.textures.exists('player')) scene.textures.remove('player');
+      scene.textures.addCanvas('player', cv);
+      resolve();
+    };
+
+    if (!normie || !normie.image) { drawFallback(); return; }
+
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      ctx.drawImage(img, 0, 0, TILE, TILE);
+      if (scene.textures.exists('player')) scene.textures.remove('player');
+      scene.textures.addCanvas('player', cv);
+      resolve();
+    };
+    img.onerror = drawFallback;
+    img.src = normie.image;
+  });
+}
+
+// ════════════════════════════════════════════════════════
+// OVERWORLD PHASER SCENE
+// ════════════════════════════════════════════════════════
+class OverworldScene extends Phaser.Scene {
+  constructor() { super({ key: 'OverworldScene' }); }
+
+  async create() {
+    G.overworldScene = this;
+    if (!MAP) generateMap();
+
+    // ── Build textures for each tile type ──
+    Object.values(T).forEach(t => makeTileTexture(this, t, `tile_${t}`));
+    makeNpcTexture(this);
+
+    // ── Draw static tilemap ──
+    this.tileImages = [];
+    for (let ty = 0; ty < MAP_H; ty++) {
+      for (let tx = 0; tx < MAP_W; tx++) {
+        const tileType = MAP[ty][tx];
+        const img = this.add.image(tx * TILE + TILE/2, ty * TILE + TILE/2, `tile_${tileType}`);
+        this.tileImages.push(img);
+      }
+    }
+
+    // ── Draw NPCs ──
+    NPC_DEFS.forEach(npc => {
+      this.add.image(npc.x * TILE + TILE/2, npc.y * TILE + TILE/2, 'npc');
+      this.add.text(npc.x * TILE + TILE/2, npc.y * TILE - 4,
+        npc.name.split(' ')[0],
+        { font: '6px monospace', fill: '#555', backgroundColor: 'rgba(255,255,255,0.8)', padding: { x:2, y:1 } }
+      ).setOrigin(0.5, 1);
+    });
+
+    // ── Player sprite ──
+    await makePlayerTexture(this, G.party[0]);
+    const { px, py } = G.world;
+    this.player = this.add.image(px * TILE + TILE/2, py * TILE + TILE/2, 'player');
+    this.player.setDepth(10);
+
+    // ── Camera follows player ──
+    this.cameras.main.setBounds(0, 0, MAP_W * TILE, MAP_H * TILE);
+    this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
+
+    // ── Input ──
+    this.cursors   = this.input.keyboard.createCursorKeys();
+    this.wasd      = this.input.keyboard.addKeys({ up:'W', down:'S', left:'A', right:'D' });
+    this.keyE      = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E);
+    this.keyI      = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.I);
+
+    this._moveCooldown = 0;
+    this._dialogueOpen = false;
+    this._battleOpen   = false;
+
+    // Show HUD
+    this._showHUD();
+    this._updateZoneLabel();
+    this._renderHUD();
+  }
+
+  update(time, delta) {
+    if (this._battleOpen || this._dialogueOpen || this._invOpen) return;
+
+    // Inventory key
+    if (Phaser.Input.Keyboard.JustDown(this.keyI)) {
+      this._openInventory(); return;
+    }
+
+    // Interact key
+    if (Phaser.Input.Keyboard.JustDown(this.keyE)) {
+      this._tryInteract(); return;
+    }
+
+    // Movement throttle
+    this._moveCooldown -= delta;
+    if (this._moveCooldown > 0) return;
+
+    const w = G.world;
+    let nx = w.px, ny = w.py;
+    let moved = false;
+
+    if (this.cursors.up.isDown    || this.wasd.up.isDown)    { ny--; moved = true; }
+    else if (this.cursors.down.isDown  || this.wasd.down.isDown)  { ny++; moved = true; }
+    else if (this.cursors.left.isDown  || this.wasd.left.isDown)  { nx--; moved = true; }
+    else if (this.cursors.right.isDown || this.wasd.right.isDown) { nx++; moved = true; }
+
+    if (!moved) return;
+
+    // Bounds + walkability
+    if (nx < 0 || ny < 0 || nx >= MAP_W || ny >= MAP_H) return;
+    if (!WALKABLE(MAP[ny][nx])) return;
+
+    w.px = nx; w.py = ny;
+    w.steps++;
+    this.player.setPosition(nx * TILE + TILE/2, ny * TILE + TILE/2);
+    this._moveCooldown = 140;
+    this._updateZoneLabel();
+    this._renderHUD();
+
+    // Random encounter
+    if (MAP[ny][nx] === T.GRASS && w.encounterCooldown === 0) {
+      const zone = this._getZone(nx, ny);
+      if (Math.random() < zone.rate) {
+        w.encounterCooldown = 8;
+        this._triggerEncounter(zone);
         return;
       }
     }
-    if (this.storyText) { this.storyText.destroy(); this.storyText = null; }
-  });
+    if (w.encounterCooldown > 0) w.encounterCooldown--;
+  }
 
-  // Draw tilemap using tileset
-  this.tileSprites = [];
-  for (let y = 0; y < MAP_HEIGHT; y++) {
-    for (let x = 0; x < MAP_WIDTH; x++) {
-      const tileType = tilemap[y][x];
-      // Map tileType to frame index: 0=grass, 1=path, 2=wall, 3=tree, 4=water
-      const frame = tileType;
-      const tile = this.add.sprite(x * TILE_SIZE + TILE_SIZE/2, y * TILE_SIZE + TILE_SIZE/2, TILESET_KEY, frame).setOrigin(0.5);
-      this.tileSprites.push(tile);
+  // ── ENCOUNTER ──
+  _triggerEncounter(zone) {
+    this._battleOpen = true;
+    G.world.journal.push(`Encountered enemy in ${zone.name}.`);
+
+    const enemy = buildEnemy(zone.tier, G.party.length);
+
+    // Quick flash
+    this.cameras.main.flash(200, 0, 0, 0);
+
+    setTimeout(() => {
+      startBattle({
+        party:    G.party.map(n => ({ ...n })),
+        enemy,
+        potions:  G.world.potions,
+        zoneName: zone.name,
+        onEnd: (result) => {
+          // Update world state from battle result
+          G.world.potions = result.potions;
+          if (result.type === 'victory') {
+            G.world.gold       += result.gold;
+            G.world.battlesWon += 1;
+            G.world.journal.push(`Defeated ${enemy.name}. +${result.gold} G.`);
+          }
+          // Sync HP/MP back to party
+          result.party.forEach((bp, i) => {
+            if (G.party[i]) {
+              G.party[i].hp    = bp.hp;
+              G.party[i].mp    = bp.mp;
+              G.party[i].alive = bp.alive;
+            }
+          });
+          // Revive KO'd at 1 HP; partial recovery for survivors
+          G.party.forEach(n => {
+            if (!n.alive) { n.alive = true; n.hp = 1; }
+            else {
+              n.hp = Math.min(n.maxHp, n.hp + Math.floor(n.maxHp * 0.15));
+              n.mp = Math.min(n.maxMp, n.mp + Math.floor(n.maxMp * 0.3));
+            }
+          });
+          this._renderHUD();
+        }
+      });
+    }, 250);
+  }
+
+  // ── INTERACT ──
+  _tryInteract() {
+    const w = G.world;
+    const dirs = { up:[0,-1], down:[0,1], left:[-1,0], right:[1,0] };
+    // Try all adjacent tiles
+    for (const [, [dx, dy]] of Object.entries(dirs)) {
+      const tx = w.px + dx, ty = w.py + dy;
+      const npc = NPC_DEFS.find(n => n.x === tx && n.y === ty);
+      if (npc) { this._openDialogue(npc.name, npc.text); return; }
+      const tile = MAP[ty]?.[tx];
+      if (tile === T.SIGN) { this._openDialogue('SIGN', 'Town crossroads. Normie Plains west, Dark Forest north-east, Coin Caves south.'); return; }
+      if (tile === T.INN)  { this._openDialogue('INNKEEPER', 'Welcome! Full heal for your party. (Coming soon!)'); return; }
+      if (tile === T.SHOP) { this._openDialogue('MERCHANT', 'Shop inventory: Potions, Buffs. (Coming soon!)'); return; }
     }
   }
 
-  // Get party from window (set by UI)
-  party = window.selectedParty || [{ id: 1, name: 'Normie #1' }];
-  // Fetch stats for each party member
-  partyStats = [];
-  for (const n of party) {
-    let stats = { hp: 10 };
+  // ── DIALOGUE ──
+  _openDialogue(name, text) {
+    this._dialogueOpen = true;
+    const d = document.getElementById('dialogue');
+    document.getElementById('dialogue-name').textContent = name;
+    document.getElementById('dialogue-text').textContent = text;
+    d.style.display = 'block';
+  }
+  _closeDialogue() {
+    this._dialogueOpen = false;
+    document.getElementById('dialogue').style.display = 'none';
+  }
+
+  // ── INVENTORY ──
+  _openInventory() {
+    this._invOpen = true;
+    renderInventory();
+    document.getElementById('panel-inventory').style.display = 'block';
+  }
+  _closeInventory() {
+    this._invOpen = false;
+    document.getElementById('panel-inventory').style.display = 'none';
+  }
+
+  // ── HUD ──
+  _showHUD() {
+    document.getElementById('game-container').style.display = 'block';
+    document.getElementById('hud').style.display    = 'flex';
+    document.getElementById('zone-label').style.display = 'block';
+  }
+
+  _renderHUD() {
+    const cont = document.getElementById('hud-party');
+    cont.innerHTML = '';
+    G.party.forEach(n => {
+      const div = document.createElement('div');
+      div.className = 'hud-member' + (n.alive ? '' : ' dead');
+      const img = document.createElement('img');
+      img.className = 'hud-img';
+      img.src = n.image || makeSvgFallback(n.id);
+      img.onerror = () => { img.src = makeSvgFallback(n.id); };
+      div.appendChild(img);
+      const hpP = Math.max(0, n.hp / n.maxHp * 100);
+      const mpP = Math.max(0, n.mp / n.maxMp * 100);
+      const info = document.createElement('div');
+      info.innerHTML = `
+        <div class="hud-name">${n.name.replace(/^Normie /, '#')}</div>
+        <div class="hud-bars">
+          <div class="hud-bar-wrap"><div class="hud-bar-fill" style="width:${hpP}%"></div></div>
+          <div class="hud-bar-wrap"><div class="hud-bar-mp" style="width:${mpP}%"></div></div>
+          <div class="hud-hp-txt">${n.hp}/${n.maxHp}</div>
+        </div>`;
+      div.appendChild(info);
+      cont.appendChild(div);
+    });
+    document.getElementById('hud-gold').textContent = G.world.gold + ' G';
+  }
+
+  _getZone(x, y) {
+    return ZONES.find(z => x >= z.minX && x < z.maxX && y >= z.minY && y < z.maxY) || ZONES[0];
+  }
+  _updateZoneLabel() {
+    const z = this._getZone(G.world.px, G.world.py);
+    document.getElementById('zone-label').textContent = z.name;
+  }
+}
+
+// ════════════════════════════════════════════════════════
+// PHASER GAME INIT
+// ════════════════════════════════════════════════════════
+function launchPhaser() {
+  if (G.game) { G.game.destroy(true); G.game = null; }
+
+  const hudHeight = 80;
+  const W = window.innerWidth;
+  const H = window.innerHeight - hudHeight;
+
+  G.game = new Phaser.Game({
+    type: Phaser.AUTO,
+    width:  W,
+    height: H,
+    parent: 'game-container',
+    pixelArt:    true,
+    roundPixels: true,
+    backgroundColor: '#ffffff',
+    scene: [OverworldScene],
+    scale: {
+      mode:           Phaser.Scale.RESIZE,
+      autoCenter:     Phaser.Scale.CENTER_BOTH,
+    },
+  });
+}
+
+// ════════════════════════════════════════════════════════
+// UI: PARTY SELECT
+// ════════════════════════════════════════════════════════
+function showPanel(id) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  const el = document.getElementById('panel-' + id);
+  if (el) el.classList.add('active');
+}
+
+function renderSlots() {
+  const cont = document.getElementById('party-slots');
+  cont.innerHTML = '';
+  document.getElementById('party-count-label').textContent = `${G.party.length} / ${MAX_PARTY}`;
+  document.getElementById('btn-explore').disabled = G.party.length === 0;
+  for (let i = 0; i < MAX_PARTY; i++) {
+    const n = G.party[i];
+    const slot = document.createElement('div');
+    slot.className = 'slot ' + (n ? 'filled' : 'empty');
+    if (n) {
+      const rm = document.createElement('button');
+      rm.className = 'slot-remove'; rm.textContent = '×';
+      rm.onclick = e => { e.stopPropagation(); G.party.splice(i, 1); renderSlots(); renderGrid(); };
+      const img = document.createElement('img');
+      img.src = n.image || makeSvgFallback(n.id);
+      img.onerror = () => { img.src = makeSvgFallback(n.id); };
+      const nm = document.createElement('div');
+      nm.className = 'slot-name'; nm.textContent = n.name.replace(/^Normie /, '#');
+      slot.append(rm, img, nm);
+    } else {
+      slot.innerHTML = `<div class="slot-num">${i+1}</div><div class="slot-empty-label">—</div>`;
+    }
+    cont.appendChild(slot);
+  }
+}
+
+function renderGrid() {
+  const grid = document.getElementById('normie-grid');
+  document.getElementById('col-count').textContent = G.collection.length ? `(${G.collection.length})` : '';
+  if (!G.collection.length) { grid.innerHTML = '<div class="loading-state">Loading…</div>'; return; }
+  grid.innerHTML = '';
+  G.collection.forEach(n => {
+    const inParty = G.party.some(p => p.id === n.id);
+    const card = document.createElement('div');
+    card.className = 'ncard' + (inParty ? ' in-party' : '');
+    const img = document.createElement('img');
+    img.src = n.image || makeSvgFallback(n.id);
+    img.onerror = () => { img.src = makeSvgFallback(n.id); };
+    card.appendChild(img);
+    card.innerHTML += `
+      <div class="ncard-id">${n.name.replace(/^Normie /, '#')}</div>
+      <div class="ncard-type">${n.type} · Lv${n.lv}</div>
+      <div class="ncard-stats">HP ${n.maxHp} · ATK ${n.atkBasic}</div>`;
+    if (!inParty) card.onclick = () => {
+      if (G.party.length >= MAX_PARTY) return;
+      G.party.push({ ...n, hp: n.maxHp, mp: n.maxMp, alive: true });
+      renderSlots(); renderGrid();
+    };
+    grid.appendChild(card);
+  });
+}
+
+// ════════════════════════════════════════════════════════
+// INVENTORY RENDER
+// ════════════════════════════════════════════════════════
+function renderInventory() {
+  // Items
+  const itemsEl = document.getElementById('inv-items');
+  itemsEl.innerHTML = '';
+  const grid = document.createElement('div'); grid.className = 'inv-grid';
+  const potion = document.createElement('div'); potion.className = 'inv-item';
+  potion.innerHTML = `<div class="inv-item-name">Potion</div><div class="inv-item-desc">Restores 35% HP to the most injured party member.</div><div class="inv-item-qty">Qty: ${G.world.potions}</div>`;
+  grid.appendChild(potion);
+  if (G.world.gold > 0) {
+    const gold = document.createElement('div'); gold.className = 'inv-item';
+    gold.innerHTML = `<div class="inv-item-name">Gold</div><div class="inv-item-desc">Earned from victories.</div><div class="inv-item-qty">${G.world.gold} G</div>`;
+    grid.appendChild(gold);
+  }
+  itemsEl.appendChild(grid);
+
+  // Party
+  const partyEl = document.getElementById('inv-party'); partyEl.innerHTML = '';
+  G.party.forEach(n => {
+    const card = document.createElement('div'); card.className = 'party-card';
+    const img  = document.createElement('img');
+    img.src = n.image || makeSvgFallback(n.id);
+    img.onerror = () => { img.src = makeSvgFallback(n.id); };
+    const hpP = Math.max(0, n.hp/n.maxHp*100);
+    const mpP = Math.max(0, n.mp/n.maxMp*100);
+    const info = document.createElement('div'); info.className = 'party-card-info';
+    info.innerHTML = `
+      <div class="party-card-name">${n.name}</div>
+      <div class="party-card-type">${n.type} · Lv${n.lv} · ${n.alive ? 'Alive' : 'KO'}</div>
+      <div class="party-card-stats">HP ${n.hp}/${n.maxHp} · MP ${n.mp}/${n.maxMp}<br>ATK ${n.atkBasic}/${n.atkSkill}/${n.atkUltimate} · DEF ${n.def} · SPD ${n.spd}</div>
+      <div class="stat-bar-row"><div class="stat-bar-wrap"><div class="stat-bar-fill" style="width:${hpP}%"></div></div><div class="stat-val">${n.hp}/${n.maxHp} HP</div></div>
+      <div class="stat-bar-row"><div class="stat-bar-wrap"><div class="stat-bar-mp-fill" style="width:${mpP}%"></div></div><div class="stat-val">${n.mp}/${n.maxMp} MP</div></div>`;
+    card.append(img, info);
+    partyEl.appendChild(card);
+  });
+
+  // Journal
+  const journalEl = document.getElementById('inv-journal');
+  journalEl.style.cssText = 'font-size:11px;color:#888;line-height:1.9;white-space:pre-line';
+  journalEl.textContent = G.world.journal.length
+    ? G.world.journal.slice(-10).reverse().join('\n')
+    : 'No entries yet. Start exploring!';
+}
+
+// ════════════════════════════════════════════════════════
+// BOOT
+// ════════════════════════════════════════════════════════
+window.addEventListener('DOMContentLoaded', () => {
+
+  // Connect MetaMask
+  document.getElementById('btn-connect').onclick = async () => {
+    const btn = document.getElementById('btn-connect');
+    btn.disabled = true; btn.textContent = 'Connecting…';
     try {
-      stats = await fetchNormieStats(n.id);
-    } catch (e) {}
-    partyStats.push({ ...n, ...stats });
-  }
-
-  // Player sprite (animated)
-  this.anims.create({
-    key: 'walk',
-    frames: this.anims.generateFrameNumbers(PLAYER_KEY, { start: 0, end: 3 }),
-    frameRate: 8,
-    repeat: -1
-  });
-  player = this.add.sprite(playerTile.x * TILE_SIZE + TILE_SIZE/2, playerTile.y * TILE_SIZE + TILE_SIZE/2, PLAYER_KEY, 0);
-  player.play('walk');
-  cursors = this.input.keyboard.createCursorKeys();
-  // HUD text for stats (show first party member)
-  this.statsText = this.add.text(10, 10, `Party: ${party.map(p=>p.name).join(', ')} | HP: ${partyStats[0]?.hp ?? 10}`, { font: '16px monospace', fill: '#fff' }).setScrollFactor?.(0);
-  // Quest state
-  this.questState = this.questState || {
-    firstBattle: false,
-    hasRare: false,
-    foundLost: false,
-    defeatedBoss: false,
-    hasStrong: false
-  };
-}
-
-
-function update() {
-  if (!canMove || !cursors) return;
-  let moved = false;
-  let nx = playerTile.x, ny = playerTile.y;
-  if (Phaser.Input.Keyboard.JustDown(cursors.left))  nx--;
-  else if (Phaser.Input.Keyboard.JustDown(cursors.right)) nx++;
-  else if (Phaser.Input.Keyboard.JustDown(cursors.up))    ny--;
-  else if (Phaser.Input.Keyboard.JustDown(cursors.down))  ny++;
-  if ((nx !== playerTile.x || ny !== playerTile.y) && tilemap[ny][nx] !== 2) {
-    playerTile.x = nx; playerTile.y = ny;
-    player.x = nx * TILE_SIZE + TILE_SIZE/2;
-    player.y = ny * TILE_SIZE + TILE_SIZE/2;
-    moved = true;
-  }
-  if (moved) {
-    canMove = false;
-    setTimeout(() => { canMove = true; }, 120); // movement throttle
-    // Random encounter system: only on grass, with cooldown
-    if (tilemap[playerTile.y][playerTile.x] === 0 && encounterCooldown === 0) {
-      if (Math.random() < 0.18) {
-        triggerEncounter(this);
-        encounterCooldown = 6; // steps before next possible encounter
-      }
+      const { provider, address } = await connectWallet();
+      G.provider = provider; G.address = address; G.demo = false;
+      const el = document.getElementById('wallet-address');
+      el.textContent = address; el.style.display = 'block';
+      btn.textContent = 'Loading NFTs…';
+      showPanel('party');
+      renderGrid();
+      G.collection = await loadWalletNormies(address, provider, col => {
+        G.collection = col; renderGrid();
+      });
+      renderGrid();
+      btn.textContent = 'Connected';
+    } catch (e) {
+      btn.textContent = 'Failed — retry'; btn.disabled = false;
+      console.error(e);
     }
-    if (encounterCooldown > 0) encounterCooldown--;
-  }
-}
+  };
 
-function triggerEncounter(scene) {
-  if (encounterText) encounterText.destroy();
-  // Pick a random enemy for demo
-  const enemy = { name: 'Wild Normie', hp: 30 + Math.floor(Math.random()*20), maxHp: 30 + Math.floor(Math.random()*20), atk: 8 + Math.floor(Math.random()*4) };
-  encounterText = scene.add.text(
-    scene.cameras.main.width / 2,
-    scene.cameras.main.height / 2,
-    'A wild enemy appears!',
-    { font: '20px monospace', fill: '#fff', backgroundColor: '#000', padding: { x: 12, y: 8 }, align: 'center' }
-  ).setOrigin(0.5);
-  scene.time.delayedCall(1000, () => {
-    if (encounterText) { encounterText.destroy(); encounterText = null; }
-    scene.scene.start('BattleScene', { party: partyStats, enemy });
+  // Demo mode
+  document.getElementById('btn-demo').onclick = async () => {
+    G.demo = true; G.collection = [];
+    document.getElementById('demo-badge').style.display = 'inline-block';
+    showPanel('party');
+    renderGrid();
+    G.collection = await loadDemoNormies(col => { G.collection = col; renderGrid(); });
+    renderGrid();
+  };
+
+  // Back to connect
+  document.getElementById('btn-back-connect').onclick = () => showPanel('connect');
+
+  // Enter world
+  document.getElementById('btn-explore').onclick = () => {
+    G.world.potions = 3;
+    G.party.forEach(n => { n.hp = n.maxHp; n.mp = n.maxMp; n.alive = true; });
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    launchPhaser();
+  };
+
+  // Battle buttons — delegate to battle.js via window.__battleAct
+  ['atk','skill','ult','pot'].forEach(t => {
+    const type = t === 'atk' ? 'attack' : t === 'pot' ? 'potion' : t;
+    document.getElementById('btn-' + t).onclick = () => window.__battleAct(type);
   });
-}
 
-window.phaserGame = new Phaser.Game(config);
+  // Battle result buttons
+  document.getElementById('btn-result-world').onclick = () => {
+    closeBattle();
+    if (G.overworldScene) G.overworldScene._battleOpen = false;
+  };
+  document.getElementById('btn-result-party').onclick = () => {
+    closeBattle();
+    G.party.forEach(n => { n.hp = n.maxHp; n.mp = n.maxMp; n.alive = true; });
+    if (G.game) { G.game.destroy(true); G.game = null; }
+    document.getElementById('game-container').style.display = 'none';
+    showPanel('party');
+    renderSlots(); renderGrid();
+  };
+
+  // Dialogue close
+  document.getElementById('dialogue-close').onclick = () => {
+    if (G.overworldScene) G.overworldScene._closeDialogue();
+  };
+
+  // Inventory close
+  document.getElementById('btn-close-inv').onclick = () => {
+    if (G.overworldScene) G.overworldScene._closeInventory();
+  };
+
+  // Handle resize
+  window.addEventListener('resize', () => {
+    if (G.game) G.game.scale.resize(window.innerWidth, window.innerHeight - 80);
+  });
+});
