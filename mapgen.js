@@ -1,4 +1,4 @@
-// mapgen.js — Procedural map generation
+// mapgen.js — Procedural map generation for each zone
 import { T } from './tiles.js';
 import { NPC_DEFS, MAPS } from './story.js';
 
@@ -6,203 +6,283 @@ function rng(seed) {
   let s = (seed*1664525+1013904223)&0x7fffffff;
   return () => { s=(s*1664525+1013904223)&0x7fffffff; return s/0x7fffffff; };
 }
+
 function blankMap(w, h, fill=T.GRASS0) {
   return Array.from({length:h}, ()=>new Array(w).fill(fill));
 }
 
-// ─── HOME ────────────────────────────────────────────────────
+// ─── HOME (bedroom upstairs + living room downstairs) ───────
 export function buildHomeMap() {
-  const W=12, H=13;
+  const W=10, H=10;
   const m = blankMap(W, H, T.BED_FLOOR);
-  // Full border walls
+
+  // Walls
   for (let x=0;x<W;x++) { m[0][x]=T.BED_WALL; m[H-1][x]=T.BED_WALL; }
   for (let y=0;y<H;y++) { m[y][0]=T.BED_WALL; m[y][W-1]=T.BED_WALL; }
-  // Door gap at bottom center — use DOOR tile (walkable, triggers exit)
-  m[H-1][5]=T.DOOR; m[H-1][6]=T.DOOR;
+
   // Furniture
-  m[1][2]=T.BED; m[1][3]=T.BED; m[2][2]=T.BED; m[2][3]=T.BED;
-  m[1][8]=T.BOOKSHELF; m[1][9]=T.BOOKSHELF; m[2][8]=T.BOOKSHELF;
-  // Rug
-  m[6][4]=T.TOWN_FLOOR; m[6][5]=T.TOWN_FLOOR; m[6][6]=T.TOWN_FLOOR; m[6][7]=T.TOWN_FLOOR;
-  m[7][4]=T.TOWN_FLOOR; m[7][5]=T.TOWN_FLOOR; m[7][6]=T.TOWN_FLOOR; m[7][7]=T.TOWN_FLOOR;
-  // Path leading to door
-  m[H-2][5]=T.PATH; m[H-2][6]=T.PATH;
-  return { tiles:m, w:W, h:H };
+  m[1][2]=T.BED; m[1][3]=T.BED;
+  m[1][7]=T.BOOKSHELF; m[1][8]=T.BOOKSHELF;
+
+  // Stairs going down (near center-right)
+  m[8][4]=T.STAIRS_DN; m[8][5]=T.STAIRS_DN;
+
+  // Door at bottom center (exit)
+  m[9][4]=T.DOOR; m[9][5]=T.DOOR;
+
+  return { tiles: m, w:W, h:H, blocked: (x,y)=>{
+    const t=m[y]?.[x];
+    return t===T.BED_WALL||t===T.BED||t===T.BOOKSHELF;
+  }};
 }
 
 // ─── OVERWORLD ──────────────────────────────────────────────
 export function buildOverworldMap() {
-  const W=56, H=56;
+  const W=48, H=48;
   const r = rng(31337);
   const m = blankMap(W, H, T.GRASS0);
+
   // Varied grass
   for (let y=1;y<H-1;y++) for (let x=1;x<W-1;x++) {
-    const v=r();
-    if      (v<0.12) m[y][x]=T.GRASS1;
-    else if (v<0.22) m[y][x]=T.GRASS2;
+    const v = r();
+    if      (v < 0.12) m[y][x] = T.GRASS1;
+    else if (v < 0.22) m[y][x] = T.GRASS2;
+    else if (v < 0.26) m[y][x] = T.DARK_GRASS;
   }
-  // Eastern dark margin
-  for (let y=0;y<H;y++) for (let x=40;x<W;x++) {
-    m[y][x]=r()<0.7?T.DARK_GRASS:T.GRASS1;
+
+  // Dark void margin in east (corrupted edge)
+  for (let y=0;y<H;y++) for (let x=38;x<W;x++) {
+    m[y][x] = r()<0.65 ? T.DARK_GRASS : T.GRASS1;
   }
-  // Border trees
+
+  // Border trees/walls
   for (let x=0;x<W;x++) { m[0][x]=T.TREE; m[H-1][x]=T.TREE; }
   for (let y=0;y<H;y++) { m[y][0]=T.TREE; m[y][W-1]=T.TREE; }
-  // River (horizontal band)
-  for (let x=4;x<50;x++) { m[17][x]=T.WATER; m[18][x]=T.WATER; }
-  // Bridge over river
-  for (let i=0;i<3;i++) { m[17][22+i]=T.PATH; m[18][22+i]=T.PATH; }
+
+  // Water river (horizontal, middle)
+  for (let x=5;x<42;x++) { m[15][x]=T.WATER; m[16][x]=T.WATER; }
+  // Bridge/path over river
+  m[15][20]=T.PATH; m[16][20]=T.PATH;
+  m[15][21]=T.PATH; m[16][21]=T.PATH;
+
   // Tree clusters
-  [[6,6,5,4],[32,10,4,5],[10,32,4,4],[36,38,5,4]].forEach(([cx,cy,cw,ch])=>{
+  const treeClusters = [[5,5,4,4],[30,8,5,5],[8,30,3,4],[35,35,4,3],[12,40,3,3]];
+  treeClusters.forEach(([cx,cy,cw,ch])=>{
     for (let dy=0;dy<ch;dy++) for (let dx=0;dx<cw;dx++) {
-      if (r()<0.65 && cx+dx<W-1 && cy+dy<H-1) m[cy+dy][cx+dx]=T.TREE;
+      if (r()<0.7 && cx+dx<W-1 && cy+dy<H-1) m[cy+dy][cx+dx]=T.TREE;
     }
   });
-  // Main path east-west
-  for (let x=2;x<W-2;x++) if(m[24][x]!==T.WATER) m[24][x]=T.PATH;
-  for (let x=38;x<W-2;x++) m[26][x]=T.PATH;
-  // Render Street (home area)
-  for (let y=21;y<28;y++) for (let x=13;x<24;x++) {
-    if (m[y][x]!==T.TREE) m[y][x]=T.PATH;
+
+  // Main stone path
+  for (let x=1;x<W-1;x++) { if(m[22][x]!==T.WATER) m[22][x]=T.PATH; }
+  for (let y=1;y<H-1;y++) { if(m[y][22]!==T.WATER) m[y][22]=T.PATH; }
+
+  // Secondary path to town (east)
+  for (let x=30;x<46;x++) m[24][x]=T.PATH;
+
+  // Home area (Render Street) - clear and cobble
+  for (let y=19;y<26;y++) for (let x=12;x<22;x++) {
+    m[y][x] = T.PATH;
   }
-  // Player home building at (14,21)
-  for (let y=21;y<24;y++) for (let x=14;x<19;x++) m[y][x]=T.HOUSE_WALL;
-  for (let x=14;x<19;x++) m[20][x]=T.ROOF;
-  m[24][15]=T.PATH; m[24][16]=T.PATH;
+
+  // Player home
+  for (let y=19;y<22;y++) for (let x=14;x<18;x++) m[y][x]=T.HOUSE_WALL;
+  m[21][15]=T.DOOR; m[21][16]=T.DOOR;
+  for (let x=14;x<18;x++) m[18][x]=T.ROOF;
+
   // Pix's house
-  for (let y=21;y<24;y++) for (let x=25;x<30;x++) m[y][x]=T.HOUSE_WALL;
-  for (let x=25;x<30;x++) m[20][x]=T.ROOF;
-  m[23][26]=T.PATH; m[23][27]=T.PATH;
-  // Signs
-  m[25][17]=T.SIGN; m[26][42]=T.SIGN;
-  return { tiles:m, w:W, h:H };
+  for (let y=20;y<23;y++) for (let x=24;x<28;x++) m[y][x]=T.HOUSE_WALL;
+  m[22][25]=T.DOOR;
+  for (let x=24;x<28;x++) m[19][x]=T.ROOF;
+
+  // Sign post near start
+  m[23][17]=T.SIGN;
+
+  // Town entrance marker (east)
+  m[24][37]=T.SIGN; m[24][38]=T.SIGN;
+
+  return { tiles: m, w:W, h:H };
 }
 
-// ─── TOWN ────────────────────────────────────────────────────
+// ─── PIXEL TOWN ─────────────────────────────────────────────
 export function buildTownMap() {
-  const W=26, H=22;
-  const r=rng(77777);
-  const m=blankMap(W,H,T.TOWN_FLOOR);
+  const W=24, H=20;
+  const r = rng(77777);
+  const m = blankMap(W, H, T.TOWN_FLOOR);
+
+  // Walls around town
   for (let x=0;x<W;x++) { m[0][x]=T.WALL; m[H-1][x]=T.WALL; }
   for (let y=0;y<H;y++) { m[y][0]=T.WALL; m[y][W-1]=T.WALL; }
-  // West exit
-  m[11][0]=T.PATH; m[12][0]=T.PATH;
-  // Oracle sanctum (north center)
-  for (let y=1;y<7;y++) for (let x=5;x<15;x++) m[y][x]=T.INN_FLOOR;
-  for (let x=5;x<15;x++) m[1][x]=T.WALL;
-  for (let y=1;y<7;y++) { m[y][5]=T.WALL; m[y][14]=T.WALL; }
-  m[6][9]=T.PATH; m[6][10]=T.PATH;
-  // Inn (west)
-  for (let y=8;y<14;y++) for (let x=1;x<7;x++) m[y][x]=T.INN_FLOOR;
-  for (let x=1;x<7;x++) m[8][x]=T.WALL;
-  for (let y=8;y<14;y++) { m[y][1]=T.WALL; m[y][6]=T.WALL; }
-  m[13][3]=T.PATH; m[13][4]=T.PATH;
-  // Shop (east)
-  for (let y=8;y<15;y++) for (let x=18;x<24;x++) m[y][x]=T.INN_FLOOR;
-  for (let x=18;x<24;x++) m[8][x]=T.WALL;
-  for (let y=8;y<15;y++) { m[y][18]=T.WALL; m[y][23]=T.WALL; }
-  m[14][20]=T.PATH; m[14][21]=T.PATH;
-  // Historian (north right)
-  for (let y=1;y<7;y++) for (let x=17;x<24;x++) m[y][x]=T.INN_FLOOR;
-  for (let x=17;x<24;x++) m[1][x]=T.WALL;
-  for (let y=1;y<7;y++) { m[y][17]=T.WALL; m[y][23]=T.WALL; }
-  m[6][19]=T.PATH; m[6][20]=T.PATH;
-  // South path to cave
-  for (let y=15;y<H-1;y++) for (let x=10;x<16;x++) m[y][x]=T.PATH;
-  m[H-1][12]=T.PATH; m[H-1][13]=T.PATH;
-  [[2,16],[3,3],[20,3],[20,16]].forEach(([y,x])=>m[y][x]=T.TREE);
-  m[15][8]=T.SIGN; m[15][17]=T.SIGN;
-  return { tiles:m, w:W, h:H };
+
+  // Town exits (west = back to overworld)
+  m[10][0]=T.PATH; m[11][0]=T.PATH;
+
+  // Oracle's sanctum (north center)
+  for (let y=1;y<7;y++) for (let x=4;x<14;x++) m[y][x]=T.INN_FLOOR;
+  for (let x=4;x<14;x++) { m[1][x]=T.WALL; }
+  for (let y=1;y<7;y++) { m[y][4]=T.WALL; m[y][13]=T.WALL; }
+  m[6][8]=T.DOOR; m[6][9]=T.DOOR;
+
+  // Inn (west side)
+  for (let y=7;y<13;y++) for (let x=1;x<7;x++) m[y][x]=T.INN_FLOOR;
+  for (let x=1;x<7;x++) m[7][x]=T.WALL;
+  for (let y=7;y<13;y++) { m[y][1]=T.WALL; m[y][6]=T.WALL; }
+  m[12][3]=T.DOOR; m[12][4]=T.DOOR;
+
+  // Shop (east side)
+  for (let y=7;y<14;y++) for (let x=16;x<22;x++) m[y][x]=T.INN_FLOOR;
+  for (let x=16;x<22;x++) m[7][x]=T.WALL;
+  for (let y=7;y<14;y++) { m[y][16]=T.WALL; m[y][21]=T.WALL; }
+  m[13][18]=T.DOOR; m[13][19]=T.DOOR;
+
+  // Historian building (center-right)
+  for (let y=1;y<7;y++) for (let x=15;x<22;x++) m[y][x]=T.INN_FLOOR;
+  for (let x=15;x<22;x++) m[1][x]=T.WALL;
+  for (let y=1;y<7;y++) { m[y][15]=T.WALL; m[y][21]=T.WALL; }
+  m[6][17]=T.DOOR; m[6][18]=T.DOOR;
+
+  // Cave path (south)
+  for (let y=14;y<H-1;y++) for (let x=8;x<16;x++) m[y][x]=T.PATH;
+  m[H-1][11]=T.PATH; m[H-1][12]=T.PATH; // town exit south → cave
+
+  // Signs
+  m[14][7]=T.SIGN; m[14][16]=T.SIGN;
+
+  // Trees/decoration
+  [[2,14],[3,2],[21,2],[21,14],[2,3],[21,3]].forEach(([y,x])=>m[y][x]=T.TREE);
+
+  return { tiles: m, w:W, h:H };
 }
 
-// ─── CAVE ────────────────────────────────────────────────────
+// ─── CAVE OF FIRST BITS ──────────────────────────────────────
 export function buildCaveMap() {
-  const W=24, H=20;
-  const r=rng(55555);
-  const m=blankMap(W,H,T.CAVE_FLOOR);
+  const W=22, H=18;
+  const r = rng(55555);
+  const m = blankMap(W, H, T.CAVE_FLOOR);
+
+  // Cave walls
   for (let x=0;x<W;x++) { m[0][x]=T.CAVE_WALL; m[H-1][x]=T.CAVE_WALL; }
   for (let y=0;y<H;y++) { m[y][0]=T.CAVE_WALL; m[y][W-1]=T.CAVE_WALL; }
+
+  // Random rock clusters
   for (let y=2;y<H-2;y++) for (let x=2;x<W-2;x++) {
     if (r()<0.18) m[y][x]=T.CAVE_WALL;
   }
-  // L-corridor
-  for (let x=2;x<W-2;x++) { m[9][x]=T.CAVE_FLOOR; m[10][x]=T.CAVE_FLOOR; }
+
+  // Main corridor (L-shape)
+  for (let x=2;x<W-2;x++) { m[8][x]=T.CAVE_FLOOR; m[9][x]=T.CAVE_FLOOR; }
   for (let y=2;y<H-2;y++) { m[y][4]=T.CAVE_FLOOR; m[y][5]=T.CAVE_FLOOR; }
-  for (let y=2;y<H-2;y++) { m[y][18]=T.CAVE_FLOOR; m[y][19]=T.CAVE_FLOOR; }
-  // Boss room
-  for (let y=4;y<14;y++) for (let x=15;x<22;x++) m[y][x]=T.CAVE_FLOOR;
-  for (let x=15;x<22;x++) { m[4][x]=T.CAVE_WALL; m[13][x]=T.CAVE_WALL; }
-  m[5][15]=T.CAVE_WALL; m[12][15]=T.CAVE_WALL;
-  // Entries
+  for (let y=2;y<H-2;y++) { m[y][16]=T.CAVE_FLOOR; m[y][17]=T.CAVE_FLOOR; }
+
+  // Boss room at east end
+  for (let y=5;y<13;y++) for (let x=14;x<20;x++) m[y][x]=T.CAVE_FLOOR;
+  for (let x=14;x<20;x++) { m[5][x]=T.CAVE_WALL; m[12][x]=T.CAVE_WALL; }
+  m[6][14]=T.CAVE_WALL; m[11][14]=T.CAVE_WALL;
+
+  // Entry (north) from town
   m[1][4]=T.CAVE_FLOOR; m[1][5]=T.CAVE_FLOOR;
-  m[H-1][18]=T.CAVE_FLOOR; m[H-1][19]=T.CAVE_FLOOR;
-  // Spirit area
-  for (let y=3;y<7;y++) for (let x=3;x<8;x++) m[y][x]=T.CAVE_FLOOR;
-  return { tiles:m, w:W, h:H };
+
+  // Exit south → void lands
+  m[H-1][16]=T.CAVE_FLOOR; m[H-1][17]=T.CAVE_FLOOR;
+
+  // Spirit NPC area
+  for (let y=3;y<6;y++) for (let x=3;x<8;x++) m[y][x]=T.CAVE_FLOOR;
+
+  return { tiles: m, w:W, h:H };
 }
 
-// ─── VOID LANDS ──────────────────────────────────────────────
+// ─── CORRUPTED VOID LANDS ────────────────────────────────────
 export function buildVoidLandsMap() {
-  const W=34, H=30;
-  const r=rng(99999);
-  const m=blankMap(W,H,T.DARK_GRASS);
+  const W=32, H=28;
+  const r = rng(99999);
+  const m = blankMap(W, H, T.DARK_GRASS);
+
+  // Void cracks (horizontal bands)
   for (let y=0;y<H;y++) for (let x=0;x<W;x++) {
-    m[y][x]=r()<0.55?T.VOID:T.DARK_GRASS;
+    m[y][x] = r()<0.55 ? T.VOID : T.DARK_GRASS;
   }
-  // Safe path
-  for (let x=2;x<W-2;x++) { m[15][x]=T.PATH; m[16][x]=T.PATH; }
+
+  // Stone path through the void (only safe route)
+  for (let x=2;x<W-2;x++) { m[14][x]=T.PATH; m[15][x]=T.PATH; }
   for (let y=6;y<H-4;y++) { m[y][4]=T.PATH; m[y][5]=T.PATH; }
-  // Ruins
-  [[5,8,5,4],[9,20,4,3],[16,24,5,4]].forEach(([cy,cx,cw,ch])=>{
+
+  // Ruined buildings
+  [[5,7,5,4],[8,18,4,3],[15,22,5,4]].forEach(([cy,cx,cw,ch])=>{
     for (let dy=0;dy<ch;dy++) for (let dx=0;dx<cw;dx++) {
-      m[cy+dy][cx+dx]=r()<0.6?T.WALL:T.CAVE_FLOOR;
+      m[cy+dy][cx+dx] = (r()<0.6) ? T.WALL : T.CAVE_FLOOR;
     }
   });
+
+  // Border walls
   for (let x=0;x<W;x++) { m[0][x]=T.CAVE_WALL; m[H-1][x]=T.CAVE_WALL; }
   for (let y=0;y<H;y++) { m[y][0]=T.CAVE_WALL; m[y][W-1]=T.CAVE_WALL; }
-  m[15][0]=T.PATH; m[16][0]=T.PATH;
-  m[15][W-1]=T.PATH; m[16][W-1]=T.PATH;
+
+  // Cave entrance (west)
+  m[14][0]=T.PATH; m[15][0]=T.PATH;
+  // Citadel entrance (east)
+  m[14][W-1]=T.PATH; m[15][W-1]=T.PATH;
+
+  // Survivor shelter
   for (let y=6;y<10;y++) for (let x=3;x<8;x++) m[y][x]=T.CAVE_FLOOR;
-  return { tiles:m, w:W, h:H };
+
+  return { tiles: m, w:W, h:H };
 }
 
-// ─── CITADEL ─────────────────────────────────────────────────
+// ─── VOID CITADEL ────────────────────────────────────────────
 export function buildCitadelMap() {
-  const W=22, H=20;
-  const r=rng(11111);
-  const m=blankMap(W,H,T.CAVE_FLOOR);
+  const W=20, H=18;
+  const r = rng(11111);
+  const m = blankMap(W, H, T.CAVE_FLOOR);
+
+  // Outer void walls
   for (let x=0;x<W;x++) { m[0][x]=T.CAVE_WALL; m[H-1][x]=T.CAVE_WALL; }
   for (let y=0;y<H;y++) { m[y][0]=T.CAVE_WALL; m[y][W-1]=T.CAVE_WALL; }
+
+  // Void tiles throughout
   for (let y=1;y<H-1;y++) for (let x=1;x<W-1;x++) {
     if (r()<0.35) m[y][x]=T.VOID;
   }
-  for (let x=1;x<W-1;x++) { m[10][x]=T.PATH; m[11][x]=T.PATH; }
-  for (let y=1;y<H-1;y++) m[y][11]=T.PATH;
-  for (let y=2;y<9;y++) for (let x=15;x<21;x++) m[y][x]=T.CAVE_FLOOR;
-  for (let x=15;x<21;x++) m[2][x]=T.CAVE_WALL;
-  for (let y=2;y<9;y++) { m[y][15]=T.CAVE_WALL; m[y][20]=T.CAVE_WALL; }
-  m[10][0]=T.PATH; m[11][0]=T.PATH;
-  return { tiles:m, w:W, h:H };
+
+  // Main corridor to boss
+  for (let x=1;x<W-1;x++) { m[9][x]=T.PATH; m[10][x]=T.PATH; }
+  for (let y=1;y<H-1;y++) { m[y][10]=T.PATH; }
+
+  // Boss chamber
+  for (let y=2;y<8;y++) for (let x=14;x<19;x++) m[y][x]=T.CAVE_FLOOR;
+  for (let x=14;x<19;x++) m[2][x]=T.CAVE_WALL;
+  for (let y=2;y<8;y++) { m[y][14]=T.CAVE_WALL; m[y][18]=T.CAVE_WALL; }
+
+  // Entrance from void lands (west)
+  m[9][0]=T.PATH; m[10][0]=T.PATH;
+
+  return { tiles: m, w:W, h:H };
 }
 
-// ─── BLOCKED / TRIGGER ───────────────────────────────────────
+// ─── OBSTACLE CHECKER ───────────────────────────────────────
 const BLOCKED_TILES = new Set([
   T.BED_WALL, T.BOOKSHELF, T.TREE, T.HOUSE_WALL, T.ROOF,
   T.WALL, T.CAVE_WALL, T.BED, T.WATER,
+  // NOTE: DOOR and STAIRS_DN are NOT blocked — they are walkable triggers
 ]);
 export const isTileBlocked = t => BLOCKED_TILES.has(t);
-export const isTrigger = t => t===T.DOOR;
+
+// Tile is "enter map trigger" if it's a door or stairs
+export const isTrigger = t => t===T.DOOR || t===T.STAIRS_DN;
 
 export const MAP_BUILDERS = {
-  home: buildHomeMap, overworld: buildOverworldMap,
-  town: buildTownMap, cave: buildCaveMap,
-  void_lands: buildVoidLandsMap, citadel: buildCitadelMap,
+  home:       buildHomeMap,
+  overworld:  buildOverworldMap,
+  town:       buildTownMap,
+  cave:       buildCaveMap,
+  void_lands: buildVoidLandsMap,
+  citadel:    buildCitadelMap,
 };
+
 export const MAP_SPAWN = {
-  home:       { x:5, y:7 },
-  overworld:  { x:15, y:25 },
-  town:       { x:4, y:12 },
+  home:       { x:4, y:7 },
+  overworld:  { x:16, y:22 },
+  town:       { x:4, y:10 },
   cave:       { x:4, y:3 },
-  void_lands: { x:5, y:15 },
-  citadel:    { x:3, y:10 },
+  void_lands: { x:5, y:14 },
+  citadel:    { x:3, y:9 },
 };

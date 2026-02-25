@@ -8,9 +8,9 @@ import { MAP_BUILDERS, isTileBlocked, MAP_SPAWN } from './mapgen.js';
 import { QUESTS, ITEMS, NPC_DEFS, ENEMIES, MAPS, LORE } from './story.js';
 import { buildNpcSprite, buildEnemySprite, buildPlayerSprite, buildPartyBattleSprite } from './sprites.js';
 
-const TS = TILE_SIZE; // 16px tiles
-const SCALE = 3;      // render tiles at 3× = 48px, fills typical viewport
-const TSS = TS * SCALE; // scaled tile size = 48px
+const TS  = TILE_SIZE;   // 16px native
+const SCL = 3;           // 3× scale → 48px per tile, fills viewport
+const TSS = TS * SCL;    // 48px rendered tile size
 
 // ═══════════════════════════════════════════════════════════
 // GLOBAL STATE
@@ -35,9 +35,7 @@ const G = {
   save: {
     gold: 0,
     inventory: { potion: 3 },  // itemId → count
-    quests: {},           // questId → quest state copy
-    activeQuests: ['prologue'],
-    completedQuests: [],
+    quests: {}, activeQuests: [], completedQuests: [],
     voidSteps: 0,         // steps on void terrain
     antivoidSteps: 0,     // steps of protection remaining
     steps: 0,
@@ -114,17 +112,9 @@ function initCanvas() {
 }
 
 function resizeCanvas() {
-  const zoneH = 32; // zone bar at top
-  const hudH  = 58; // HUD at bottom
   W = canvas.width  = window.innerWidth;
-  H = canvas.height = window.innerHeight - zoneH - hudH;
-  canvas.style.top = zoneH + 'px';
-  canvas.style.left = '0';
+  H = canvas.height = window.innerHeight;
   if (ctx) ctx.imageSmoothingEnabled = false;
-  // Show d-pad on touch devices
-  if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
-    document.getElementById('dpad')?.classList.add('visible');
-  }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -140,26 +130,10 @@ function initInput() {
   });
   window.addEventListener('keyup', e => { G.keys[e.code] = false; });
 
-  // Touch/click for dialogue
-  canvas.addEventListener('click', () => { G.interactPressed = true; });
-
-  // Mobile d-pad — uses data-dir attribute
-  const dirKeys = { up:['ArrowUp','KeyW'], down:['ArrowDown','KeyS'], left:['ArrowLeft','KeyA'], right:['ArrowRight','KeyD'] };
-  document.querySelectorAll('.dp[data-dir]').forEach(btn => {
-    const dir = btn.dataset.dir;
-    if (dir === 'act') {
-      btn.addEventListener('touchstart', e => { e.preventDefault(); G.interactPressed = true; }, {passive:false});
-      btn.addEventListener('click', () => G.interactPressed = true);
-    } else {
-      const codes = dirKeys[dir] || [];
-      btn.addEventListener('touchstart', e => { e.preventDefault(); codes.forEach(c => G.keys[c]=true); }, {passive:false});
-      btn.addEventListener('touchend',   e => { e.preventDefault(); codes.forEach(c => G.keys[c]=false); }, {passive:false});
-      btn.addEventListener('mousedown',  e => { codes.forEach(c => G.keys[c]=true); });
-      btn.addEventListener('mouseup',    e => { codes.forEach(c => G.keys[c]=false); });
-    }
+  // Touch/click for mobile
+  canvas.addEventListener('click', () => {
+    G.interactPressed = true;
   });
-  // Dialogue tap
-  document.getElementById('dialogue')?.addEventListener('click', advanceDialogue);
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -322,19 +296,12 @@ function handleMovement(dt) {
   const tile = tiles[ny][nx];
   if (isTileBlocked(tile)) { G.moving=false; return; }
 
-  // Home exit — walk onto DOOR tile at bottom
-  if (G.mapId==='home' && tile===T.DOOR) {
-    completeQuestStep('prologue','leave_home');
-    fadeToMap('overworld', 15, 25);
-    G.moveCooldown = 400;
-    return;
-  }
-
-  // Map connections via story.js MAPS config
+  // Check map transition
   const mapCfg = MAPS[G.mapId];
   if (mapCfg?.connections) {
     for (const conn of mapCfg.connections) {
       if (nx===conn.triggerX && ny===conn.triggerY) {
+        // Check if cave requires render_key
         if (conn.destMap==='cave' && !hasItem('render_key') &&
             !G.save.completedQuests.includes('ch1_bit_shards')) {
           openDialogue('CAVE ENTRANCE', [
@@ -345,14 +312,24 @@ function handleMovement(dt) {
           return;
         }
         fadeToMap(conn.destMap, conn.destX, conn.destY);
-        G.moveCooldown = 400;
+        G.moveCooldown = 300;
         return;
       }
     }
   }
 
+  // Home exits
+  if (G.mapId === 'home') {
+    if (tile === T.DOOR) {
+      completeQuestStep('prologue', 'leave_home');
+      fadeToMap('overworld', 16, 23);
+      G.moveCooldown = 400;
+      return;
+    }
+  }
+
   G.px=nx; G.py=ny;
-  G.moving=true; G.moveCooldown=115;
+  G.moving=true; G.moveCooldown=110;
   G.save.steps++;
   G.encounterCooldown = Math.max(0, G.encounterCooldown-1);
 
@@ -952,22 +929,19 @@ function closeMenu() {
 }
 
 function renderMenuTab(tab) {
-  // Use .mpanel / .mpanel.active classes
-  document.querySelectorAll('.mpanel').forEach(p => p.classList.remove('active'));
-  const panelMap = { inventory:'menu-inv', quests:'menu-quests', party:'menu-party', journal:'menu-journal' };
-  const targetId = panelMap[tab];
-  if (targetId) {
-    const el = document.getElementById(targetId);
-    if (el) el.classList.add('active');
-  }
-  // Also update gold display
-  const mgEl = document.getElementById('menu-gold');
-  if (mgEl) mgEl.textContent = G.save.gold;
+  // Show/hide all content panels
+  const panels = { inventory:'menu-inv', quests:'menu-quests', party:'menu-party', journal:'menu-journal' };
+  Object.values(panels).forEach(id=>{
+    const el=document.getElementById(id);
+    if(el) el.style.display='none';
+  });
+  const active=panels[tab];
+  if(active) { const el=document.getElementById(active); if(el) el.style.display='block'; }
 
-  if (tab==='inventory') renderInventory();
-  else if (tab==='journal') renderJournal();
-  else if (tab==='party') renderPartyStatus();
-  else if (tab==='quests') renderQuests();
+  if(tab==='inventory') renderInventory();
+  else if(tab==='journal') renderJournal();
+  else if(tab==='party') renderPartyStatus();
+  else if(tab==='quests') renderQuests();
 }
 
 function renderInventory() {
@@ -1080,122 +1054,114 @@ function render(dt) {
 
   const { tiles, w, h } = G.mapData;
 
-  // Smooth camera (scaled coords)
-  const mapPixW = w * TSS, mapPixH = h * TSS;
-  const tcx = Math.max(0, Math.min(G.px*TSS + TSS/2 - W/2, mapPixW - W));
-  const tcy = Math.max(0, Math.min(G.py*TSS + TSS/2 - H/2, mapPixH - H));
+  // Smooth camera in scaled pixel space
+  const mapPxW = w*TSS, mapPxH = h*TSS;
+  const tcx = Math.max(0, Math.min(G.px*TSS + TSS/2 - W/2, mapPxW - W));
+  const tcy = Math.max(0, Math.min(G.py*TSS + TSS/2 - H/2, mapPxH - H));
   G.camX += (tcx - G.camX) * 0.14;
   G.camY += (tcy - G.camY) * 0.14;
   const ox = Math.round(G.camX), oy = Math.round(G.camY);
 
-  // Clear with map-appropriate BG color
-  const bgColor = G.mapId==='cave'||G.mapId==='citadel' ? '#2a2b2c'
-                : G.mapId==='void_lands' ? '#1e1f20'
-                : '#b8b9b8';
-  ctx.fillStyle = bgColor;
+  // Background fill
+  const bg = (G.mapId==='cave'||G.mapId==='citadel') ? '#242526'
+           : G.mapId==='void_lands' ? '#1a1b1c' : '#b0b1b0';
+  ctx.fillStyle = bg;
   ctx.fillRect(0, 0, W, H);
   ctx.imageSmoothingEnabled = false;
 
-  // Tiles (scaled)
+  // Draw tiles at TSS (48px)
   const vtx = Math.max(0, Math.floor(ox/TSS) - 1);
   const vty = Math.max(0, Math.floor(oy/TSS) - 1);
   const vtw = Math.ceil(W/TSS) + 3;
   const vth = Math.ceil(H/TSS) + 3;
-  for (let ty=vty; ty<Math.min(vty+vth,h); ty++) {
-    for (let tx=vtx; tx<Math.min(vtx+vtw,w); tx++) {
-      const tile = getTile(tiles[ty][tx]);
+  for (let ty = vty; ty < Math.min(vty+vth, h); ty++) {
+    for (let tx = vtx; tx < Math.min(vtx+vtw, w); tx++) {
+      const tileId = tiles[ty][tx];
+      const img = getTile(tileId);
       const sx = tx*TSS - ox, sy = ty*TSS - oy;
-      if (tile) {
-        ctx.drawImage(tile, sx, sy, TSS, TSS);
+      if (img) {
+        ctx.drawImage(img, sx, sy, TSS, TSS);
       } else {
-        const t = tiles[ty][tx];
-        ctx.fillStyle = t===T.VOID?'#32333a':t===T.DARK_GRASS?'#5a5b5a':t===T.CAVE_FLOOR?'#3a3b3c':'#c8c9c8';
+        ctx.fillStyle = tileId===T.VOID      ? '#2a2b30'
+                      : tileId===T.DARK_GRASS? '#585958'
+                      : tileId===T.CAVE_FLOOR? '#3c3d3e' : '#c0c1c0';
         ctx.fillRect(sx, sy, TSS, TSS);
       }
     }
   }
 
-  // Grid lines (subtle, only visible tiles)
-  ctx.strokeStyle = 'rgba(0,0,0,0.04)';
+  // Subtle grid lines
+  ctx.strokeStyle = 'rgba(0,0,0,0.06)';
   ctx.lineWidth = 1;
-  for (let ty=vty; ty<=Math.min(vty+vth,h); ty++) {
+  for (let ty = vty; ty <= Math.min(vty+vth, h); ty++) {
     ctx.beginPath(); ctx.moveTo(0, ty*TSS-oy); ctx.lineTo(W, ty*TSS-oy); ctx.stroke();
   }
-  for (let tx=vtx; tx<=Math.min(vtx+vtw,w); tx++) {
+  for (let tx = vtx; tx <= Math.min(vtx+vtw, w); tx++) {
     ctx.beginPath(); ctx.moveTo(tx*TSS-ox, 0); ctx.lineTo(tx*TSS-ox, H); ctx.stroke();
   }
 
-  // NPC sprites (scaled)
-  NPC_DEFS.filter(n => n.mapId===G.mapId).forEach(npc => {
+  // NPCs — scaled with bounce
+  NPC_DEFS.filter(n => n.mapId === G.mapId).forEach(npc => {
     const sx = npc.x*TSS - ox, sy = npc.y*TSS - oy;
-    if (sx<-64||sy<-80||sx>W+64||sy>H+80) return;
+    if (sx < -100 || sy < -120 || sx > W+100 || sy > H+120) return;
+    const bob = Math.sin(Date.now()*0.003 + npc.id.charCodeAt(0)*0.7) * 3;
+    const dh = TSS * 1.5, dw = dh * 0.65;
     const spr = G.npcSprites[npc.id];
-    const bob = Math.sin(Date.now()*0.003 + npc.id.charCodeAt(0)*0.7) * 2;
-    const drawH = TSS * 1.5;
-    const drawW = drawH * 0.6;
     if (spr) {
-      ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(spr, sx + TSS/2 - drawW/2, sy + TSS - drawH + bob, drawW, drawH);
+      ctx.drawImage(spr, sx + TSS/2 - dw/2, sy + TSS - dh + bob, dw, dh);
     } else {
       ctx.fillStyle = '#48494b';
-      ctx.fillRect(sx + TSS/2 - 8, sy + 4, 16, 24);
+      ctx.fillRect(sx + TSS/2 - 10, sy + 6, 20, 28);
     }
-    // Name tag above NPC
-    ctx.font = 'bold 10px "Space Mono", monospace';
+    // Name label
+    ctx.font = 'bold 10px monospace';
     ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
-    const nw = ctx.measureText(npc.name).width + 10;
-    const ny = sy + TSS - drawH + bob - 4;
-    ctx.fillStyle = 'rgba(30,31,32,0.82)';
+    const nw = ctx.measureText(npc.name).width + 12;
+    const ny = sy + TSS - dh + bob - 5;
+    ctx.fillStyle = 'rgba(26,27,28,0.82)';
     ctx.fillRect(sx + TSS/2 - nw/2, ny - 14, nw, 14);
     ctx.fillStyle = '#e3e5e4';
     ctx.fillText(npc.name, sx + TSS/2, ny);
   });
 
-  // Player (scaled)
+  // Player — scaled
   const psx = G.px*TSS - ox, psy = G.py*TSS - oy;
-  const drawH = TSS * 1.5, drawW = drawH * 0.6;
+  const pdh = TSS * 1.6, pdw = pdh * 0.65;
   if (G.playerSprite) {
     ctx.imageSmoothingEnabled = false;
     const sp = G.playerSprite;
-    // Drop shadow
-    ctx.fillStyle = 'rgba(0,0,0,0.18)';
+    ctx.fillStyle = 'rgba(0,0,0,0.15)';
     ctx.beginPath();
-    ctx.ellipse(psx + TSS/2, psy + TSS - 2, 12, 4, 0, 0, Math.PI*2);
+    ctx.ellipse(psx + TSS/2, psy + TSS - 3, pdw*0.42, 5, 0, 0, Math.PI*2);
     ctx.fill();
-    ctx.drawImage(sp.canvas, psx + TSS/2 - drawW/2, psy + TSS - drawH, drawW, drawH);
+    ctx.drawImage(sp.canvas, psx + TSS/2 - pdw/2, psy + TSS - pdh, pdw, pdh);
   } else {
     ctx.fillStyle = '#48494b';
-    ctx.fillRect(psx + TSS/2 - 8, psy + 4, 16, 24);
+    ctx.fillRect(psx + TSS/2 - 10, psy + 4, 20, 30);
     ctx.fillStyle = '#e3e5e4';
-    ctx.fillRect(psx + TSS/2 - 6, psy + 7, 3, 3);
-    ctx.fillRect(psx + TSS/2 + 3, psy + 7, 3, 3);
+    ctx.fillRect(psx + TSS/2 - 6, psy + 10, 5, 5);
+    ctx.fillRect(psx + TSS/2 + 1, psy + 10, 5, 5);
   }
 
-  // Zone ambience vignette
-  drawVignette();
+  // Vignette
+  const vc = G.mapId==='cave'      ? 'rgba(0,0,0,0.45)'
+           : G.mapId==='void_lands' ? 'rgba(0,0,0,0.55)'
+           : G.mapId==='citadel'    ? 'rgba(0,0,0,0.6)'
+           :                          'rgba(0,0,0,0.08)';
+  const vg = ctx.createRadialGradient(W/2, H/2, H*0.28, W/2, H/2, H*0.85);
+  vg.addColorStop(0, 'rgba(0,0,0,0)');
+  vg.addColorStop(1, vc);
+  ctx.fillStyle = vg;
+  ctx.fillRect(0, 0, W, H);
 
-  // Fade overlay
-  if(G.fadeAlpha>0){
-    ctx.fillStyle=`rgba(0,0,0,${G.fadeAlpha})`;
-    ctx.fillRect(0,0,W,H);
+  // Fade
+  if (G.fadeAlpha > 0) {
+    ctx.fillStyle = `rgba(0,0,0,${G.fadeAlpha})`;
+    ctx.fillRect(0, 0, W, H);
   }
 
-  // Notifications
   drawNotifications();
-
-  // HUD overlay (quest tracker)
   drawQuestTracker();
-}
-
-function drawVignette() {
-  const mapId=G.mapId;
-  let col='rgba(0,0,0,0.06)';
-  if(mapId==='cave')      col='rgba(0,0,0,0.35)';
-  if(mapId==='void_lands') col='rgba(0,0,0,0.45)';
-  if(mapId==='citadel')   col='rgba(0,0,0,0.50)';
-  const vg=ctx.createRadialGradient(W/2,H/2,H*0.3,W/2,H/2,H*0.8);
-  vg.addColorStop(0,'rgba(0,0,0,0)'); vg.addColorStop(1,col);
-  ctx.fillStyle=vg; ctx.fillRect(0,0,W,H);
 }
 
 function drawNotifications() {
@@ -1249,20 +1215,22 @@ function drawQuestTracker() {
 // HUD
 // ═══════════════════════════════════════════════════════════
 function renderHUD() {
-  const setEl = (id, val) => { const e = document.getElementById(id); if (e) e.textContent = val; };
-  setEl('zone-name',    MAPS[G.mapId]?.name || G.mapId);
-  setEl('hud-gold-val', G.save.gold);
-  const lead = G.party[0];
-  if (!lead) return;
-  setEl('hud-lead-name', lead.name);
-  setEl('hud-lead-type', lead.type);
-  setEl('hud-hp-val',    lead.hp + '/' + lead.maxHp);
-  const hpPct = Math.max(0, lead.hp / lead.maxHp * 100);
-  const mpPct = Math.max(0, lead.mp / lead.maxMp * 100);
-  const hpBar = document.getElementById('hud-hp-bar');
-  const mpBar = document.getElementById('hud-mp-bar');
-  if (hpBar) hpBar.style.width = hpPct + '%';
-  if (mpBar) mpBar.style.width = mpPct + '%';
+  function set(id, val) { const el=document.getElementById(id); if(el) el.textContent=val; }
+  function css(id, prop, val) { const el=document.getElementById(id); if(el) el.style[prop]=val; }
+
+  set('zone-name', MAPS[G.mapId]?.name||G.mapId);
+  set('hud-gold', G.save.gold);
+  set('hud-pot', '⬜×'+(G.save.inventory.potion||0));
+
+  const lead=G.party[0];
+  if(!lead) return;
+  const hpPct=Math.max(0,lead.hp/lead.maxHp*100);
+  const mpPct=Math.max(0,lead.mp/lead.maxMp*100);
+  set('hud-lead-name', lead.name);
+  set('hud-lead-type', lead.type+' #'+lead.id);
+  css('hud-hp-bar', 'width', hpPct+'%');
+  css('hud-mp-bar', 'width', mpPct+'%');
+  set('hud-hp-val', lead.hp+'/'+lead.maxHp);
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1403,93 +1371,272 @@ function showIntro() {
 // PARTY SELECT
 // ═══════════════════════════════════════════════════════════
 function renderGrid() {
-  const grid = document.getElementById('normie-grid');
-  const colCount = document.getElementById('col-count');
-  if (colCount) colCount.textContent = G.collection.length ? '(' + G.collection.length + ')' : '';
-
-  if (!G.collection.length) {
-    grid.innerHTML = '<div class="grid-loading"><div class="dot-loader"><span></span><span></span><span></span></div>Loading Normies…</div>';
+  const grid=document.getElementById('normie-grid');
+  const cc=document.getElementById('col-count');
+  if(cc) cc.textContent=G.collection.length?`(${G.collection.length})`:'';
+  if(!G.collection.length){
+    grid.innerHTML='<div class="grid-loading">Loading Normies…</div>';
     return;
   }
-
-  grid.innerHTML = '';
-  G.collection.forEach(n => {
-    const inParty = G.party.some(p => p.id === n.id);
-    const card = document.createElement('div');
-    card.className = 'ncard' + (inParty ? ' in-party' : '');
-
-    // Portrait canvas
-    const bsp = G.battleSprites[n.id];
-    const cv = document.createElement('canvas');
-    cv.width = 64; cv.height = 64;
-    const cx = cv.getContext('2d'); cx.imageSmoothingEnabled = false;
-    if (bsp) cx.drawImage(bsp, 0, 0, 64, 64);
-    else { cx.fillStyle = '#ddd'; cx.fillRect(0,0,64,64); cx.fillStyle='#aaa'; cx.font='10px monospace'; cx.textAlign='center'; cx.fillText('#'+n.id,32,36); }
+  grid.innerHTML='';
+  G.collection.forEach(n=>{
+    const inParty=G.party.some(p=>p.id===n.id);
+    const card=document.createElement('div');
+    card.className='ncard'+(inParty?' in-party':'');
+    const bsp=G.battleSprites[n.id];
+    const cv=document.createElement('canvas'); cv.width=48; cv.height=48;
+    const cx=cv.getContext('2d'); cx.imageSmoothingEnabled=false;
+    if(bsp) cx.drawImage(bsp,0,0,48,48);
+    else { cx.fillStyle='#e0e0de'; cx.fillRect(0,0,48,48); cx.fillStyle='#999'; cx.font='9px monospace'; cx.textAlign='center'; cx.textBaseline='middle'; cx.fillText('#'+n.id,24,24); }
     card.appendChild(cv);
-
-    const info = document.createElement('div');
-    info.innerHTML = `<div class="ncard-id">#${n.id}</div>
-      <div class="ncard-type">${n.type}</div>
-      <div class="ncard-stat">HP ${n.maxHp}</div>
-      <div class="ncard-expr">${n.expression}</div>`;
-    card.appendChild(info);
-
-    if (!inParty) {
-      card.onclick = () => {
-        if (G.party.length >= 5) return;
-        G.party.push({...n});
-        renderSlots();
-        renderGrid();
-      };
-    }
+    const id=document.createElement('div'); id.className='ncard-id'; id.textContent='#'+n.id;
+    const ty=document.createElement('div'); ty.className='ncard-type'; ty.textContent=n.type;
+    const st=document.createElement('div'); st.className='ncard-stat'; st.textContent=`HP ${n.maxHp} · SPD ${n.spd}`;
+    const ex=document.createElement('div'); ex.className='ncard-expr'; ex.textContent=n.expression;
+    card.append(id,ty,st,ex);
+    if(!inParty) card.onclick=()=>{ if(G.party.length>=5)return; G.party.push({...n}); renderSlots(); renderGrid(); };
     grid.appendChild(card);
   });
 }
+
 function renderSlots() {
-  const cont = document.getElementById('party-slots');
-  cont.innerHTML = '';
-  const countEl = document.getElementById('party-count');
-  if (countEl) countEl.textContent = G.party.length + ' / 5';
-  const startBtn = document.getElementById('btn-start');
-  if (startBtn) startBtn.disabled = G.party.length === 0;
-
-  for (let i = 0; i < 5; i++) {
-    const n = G.party[i];
-    const sl = document.createElement('div');
-    sl.className = 'pslot ' + (n ? 'filled' : 'empty') + (i === 0 && n ? ' lead' : '');
-
-    const num = document.createElement('span');
-    num.className = 'pslot-num';
-    num.textContent = i + 1;
-    sl.appendChild(num);
-
-    if (n) {
-      const bsp = G.battleSprites[n.id];
-      const cv = document.createElement('canvas');
-      cv.width = 36; cv.height = 36;
-      const cx = cv.getContext('2d'); cx.imageSmoothingEnabled = false;
-      if (bsp) cx.drawImage(bsp, 0, 0, 36, 36);
+  const cont=document.getElementById('party-slots'); cont.innerHTML='';
+  const pc=document.getElementById('party-count'); if(pc) pc.textContent=`${G.party.length} / 5`;
+  const sb=document.getElementById('btn-start'); if(sb) sb.disabled=G.party.length===0;
+  for(let i=0;i<5;i++){
+    const n=G.party[i], sl=document.createElement('div');
+    sl.className='pslot '+(n?'filled':'empty');
+    if(n){
+      const bsp=G.battleSprites[n.id];
+      const cv=document.createElement('canvas'); cv.width=40; cv.height=40;
+      const cx=cv.getContext('2d'); cx.imageSmoothingEnabled=false;
+      if(bsp) cx.drawImage(bsp,0,0,40,40);
       sl.appendChild(cv);
-
-      const info = document.createElement('div');
-      info.className = 'pslot-info';
-      info.innerHTML = `<div class="pslot-name">${n.name}</div><div class="pslot-type">${n.type}</div>`;
-      sl.appendChild(info);
-
-      if (i === 0) {
-        const lead = document.createElement('span');
-        lead.className = 'pslot-lead-mark';
-        lead.textContent = 'LEAD';
-        sl.appendChild(lead);
-      }
-
-      sl.onclick = () => { G.party.splice(i, 1); renderSlots(); renderGrid(); };
+      const info=document.createElement('div'); info.className='pslot-info';
+      if(i===0){ const lm=document.createElement('div'); lm.className='pslot-lead'; lm.textContent='LEAD'; info.appendChild(lm); }
+      const nm=document.createElement('div'); nm.className='pslot-name'; nm.textContent='#'+n.id;
+      const ty=document.createElement('div'); ty.className='pslot-type'; ty.textContent=n.type;
+      const hp=document.createElement('div'); hp.className='pslot-hp'; hp.textContent=`HP ${n.maxHp}`;
+      info.append(nm,ty,hp); sl.appendChild(info);
+      sl.title='Click to remove'; sl.onclick=()=>{ G.party.splice(i,1); renderSlots(); renderGrid(); };
     } else {
-      const empty = document.createElement('div');
-      empty.className = 'pslot-empty-num';
-      empty.textContent = i + 1;
-      sl.appendChild(empty);
+      const em=document.createElement('div'); em.className='pslot-num'; em.textContent=i+1; sl.appendChild(em);
     }
     cont.appendChild(sl);
   }
+}
+
+// ═══════════════════════════════════════════════════════════
+// GAME LOOP
+// ═══════════════════════════════════════════════════════════
+function gameLoop(ts=0) {
+  const dt=Math.min(ts-lastT,50); lastT=ts;
+
+  if(G.screen==='game'){
+    updateFade(dt);
+    if(!G.battle && !G.menu && !G.dlg){
+      handleMovement(dt);
+    }
+    handleInteract();
+    handleMenuKey();
+
+    // Decay flash in battle
+    if(G.battle){
+      if(G.battle.enemy.flashTimer>0) G.battle.enemy.flashTimer--;
+      G.battle.fighters?.forEach(f=>{if(f.flashTimer>0)f.flashTimer--;});
+    }
+    render(dt);
+  }
+
+  raf=requestAnimationFrame(gameLoop);
+}
+
+// ═══════════════════════════════════════════════════════════
+// SCREEN MANAGEMENT
+// ═══════════════════════════════════════════════════════════
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById('screen-'+id).classList.add('active');
+  G.screen=id;
+}
+
+// ═══════════════════════════════════════════════════════════
+// BOOT
+// ═══════════════════════════════════════════════════════════
+window.addEventListener('DOMContentLoaded', async () => {
+  drawTitleLogo();
+  initCanvas();
+  initInput();
+  initQuestSave();
+  startQuest('prologue');
+
+  // Detect wallets on load and update button label
+  function refreshWalletBtn() {
+    const btn=document.getElementById('btn-connect');
+    const wallets=detectWallets();
+    if(wallets.length===0){
+      btn.textContent='No Wallet Found';
+      btn.title='Install MetaMask, Coinbase Wallet, or another Web3 wallet';
+    } else {
+      btn.textContent=`⬜ Connect ${wallets[0].name}`;
+    }
+  }
+  refreshWalletBtn();
+  // Re-check after a tick (wallets may inject late)
+  setTimeout(refreshWalletBtn, 800);
+
+  // Buttons
+  document.getElementById('btn-connect').onclick=async()=>{
+    const btn=document.getElementById('btn-connect');
+    const wallets=detectWallets();
+    if(wallets.length===0){
+      // No wallet installed — show helpful message
+      showWalletHelp();
+      return;
+    }
+    // If multiple wallets, show picker; otherwise connect directly
+    if(wallets.length>1){
+      showWalletPicker(wallets, async(walletId)=>{
+        await doConnect(walletId);
+      });
+    } else {
+      await doConnect(wallets[0].id);
+    }
+  };
+
+  async function doConnect(walletId) {
+    const btn=document.getElementById('btn-connect');
+    btn.disabled=true; btn.textContent='Connecting…';
+    try{
+      const {provider,address,walletName}=await connectWallet(walletId);
+      G.demo=false;
+      document.getElementById('wallet-addr').textContent=
+        `${walletName}: ${address.slice(0,6)}…${address.slice(-4)}`;
+      btn.textContent='Loading NFTs…';
+      G.collection=await loadWalletNormies(address,provider,col=>{
+        G.collection=col; col.forEach(buildBattleSprite); renderGrid();
+      });
+      G.collection.forEach(buildBattleSprite);
+      if(G.collection.length===0){
+        // No Normies — offer demo
+        btn.textContent='No Normies Found';
+        btn.disabled=false;
+        document.getElementById('wallet-addr').textContent+=
+          ' · No Normies found — try Demo Mode';
+      } else {
+        showIntro();
+      }
+    }catch(e){
+      btn.disabled=false;
+      refreshWalletBtn();
+      if(e.message==='NO_WALLET') showWalletHelp();
+      else if(e.code===4001) btn.textContent='Rejected — try again';
+      else { btn.textContent='Failed — retry'; console.error(e); }
+    }
+  }
+
+  function showWalletHelp() {
+    const el=document.getElementById('wallet-help');
+    if(el) el.classList.remove('hidden');
+  }
+
+  function showWalletPicker(wallets, cb) {
+    const overlay=document.createElement('div');
+    overlay.className='wallet-picker-overlay';
+    overlay.innerHTML=`<div class="wallet-picker">
+      <div class="wp-title">Choose Wallet</div>
+      ${wallets.map(w=>`<button class="wp-btn btn-ghost" data-id="${w.id}">${w.name}</button>`).join('')}
+      <button class="wp-cancel btn-back">Cancel</button>
+    </div>`;
+    document.body.appendChild(overlay);
+    overlay.querySelectorAll('.wp-btn').forEach(b=>{
+      b.onclick=()=>{ overlay.remove(); cb(b.dataset.id); };
+    });
+    overlay.querySelector('.wp-cancel').onclick=()=>overlay.remove();
+    overlay.onclick=(e)=>{ if(e.target===overlay) overlay.remove(); };
+  }
+
+  document.getElementById('btn-demo').onclick=async()=>{
+    G.demo=true; G.collection=[];
+    document.getElementById('demo-pill').classList.add('show');
+    G.collection=await loadDemoNormies(col=>{
+      G.collection=col; col.forEach(buildBattleSprite); renderGrid();
+    });
+    G.collection.forEach(buildBattleSprite);
+    showIntro();
+  };
+
+  document.getElementById('btn-start').onclick=()=>{
+    if(!G.party.length) return;
+    startGame();
+  };
+
+  // Battle buttons
+  document.getElementById('btn-atk').onclick  =()=>window.__battleAction('attack');
+  document.getElementById('btn-skill').onclick =()=>window.__battleAction('skill');
+  document.getElementById('btn-ult').onclick   =()=>window.__battleAction('ult');
+  document.getElementById('btn-bpot').onclick  =()=>window.__battleAction('potion');
+  document.getElementById('btn-bat-world').onclick=()=>{
+    if(G.battle){ G.battle=null; document.getElementById('battle').classList.add('hidden'); renderHUD(); }
+  };
+  document.getElementById('btn-bat-party').onclick=()=>{
+    G.battle=null; document.getElementById('battle').classList.add('hidden');
+    G.party.forEach(n=>{n.hp=n.maxHp;n.mp=n.maxMp;n.alive=true;});
+    if(raf){cancelAnimationFrame(raf);raf=null;}
+    G.screen='party'; showScreen('party'); renderSlots(); renderGrid();
+  };
+
+  // Menu tabs
+  document.querySelectorAll('.menu-tab').forEach(t=>{
+    t.onclick=()=>{ renderMenuTab(t.dataset.tab); document.querySelectorAll('.menu-tab').forEach(x=>x.classList.toggle('active',x===t)); };
+  });
+  document.getElementById('btn-close-menu').onclick=closeMenu;
+  document.getElementById('btn-close-shop').onclick=()=>document.getElementById('shop').classList.add('hidden');
+  const openMenuBtn=document.getElementById('btn-open-menu');
+  if(openMenuBtn) openMenuBtn.onclick=()=>{ if(G.screen==='game') openMenu('inventory'); };
+
+  // Dialogue click
+  document.getElementById('dialogue').addEventListener('click', advanceDialogue);
+
+  // Back buttons
+  document.getElementById('btn-back-title').onclick=()=>{
+    if(raf){cancelAnimationFrame(raf);raf=null;}
+    showScreen('title');
+  };
+
+  document.getElementById('btn-ending-play-again').onclick=()=>location.reload();
+});
+
+function buildBattleSprite(n) {
+  if(!G.battleSprites[n.id]) {
+    G.battleSprites[n.id] = buildPartyBattleSprite(n.pixels);
+  }
+}
+
+function startGame() {
+  // Init world state
+  G.save.gold=0; G.save.battlesWon=0;
+  G.save.inventory={potion:3};
+  G.save.journal=['Chapter 1: The First Render — Your story begins.'];
+  G.party.forEach(n=>{n.hp=n.maxHp;n.mp=n.maxMp;n.alive=true;});
+
+  // Build player sprite from lead Normie
+  const lead=G.party[0];
+  G.playerSprite=buildPlayerSprite(lead?.pixels, lead?.px);
+
+  loadMap('home');
+  G.camX = G.px * TSS;
+  G.camY = G.py * TSS;
+
+  showScreen('game');
+  renderHUD();
+
+  // Opening dialogue from Mom
+  setTimeout(()=>{
+    const mom=NPC_DEFS.find(n=>n.id==='mom');
+    if(mom) openDialogue(mom.name, mom.lines, G.npcSprites['mom']);
+  }, 800);
+
+  if(raf) cancelAnimationFrame(raf);
+  raf=requestAnimationFrame(gameLoop);
 }
