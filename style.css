@@ -23,15 +23,17 @@ button{font-family:'Space Mono',monospace;font-size:10px;font-weight:700;letter-
 #screen-game{background:#48494b}
 
 /* ── TITLE */
-.title-inner{max-width:420px;margin:0 auto;padding:48px 24px 40px;text-align:center;background:#e3e5e4}
-#logo-canvas{image-rendering:pixelated;margin-bottom:12px}
-.tagline{font-size:9px;letter-spacing:.2em;color:#8a8b8a;margin-bottom:16px;font-style:italic}
-.title-divider{width:80px;height:1px;background:#48494b;margin:16px auto}
-.sub-text{font-size:10px;color:#8a8b8a;line-height:1.9;margin-bottom:20px}
-.wallet-addr{font-size:9px;color:#8a8b8a;margin-bottom:10px;word-break:break-all}
-.btn-row{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-bottom:12px}
-.fine-print{font-size:8px;color:#bbb;letter-spacing:.1em}
-.demo-pill{display:none;font-size:8px;letter-spacing:.1em;border:1px solid #48494b;padding:2px 6px;margin-top:8px;display:inline-block}
+#screen-title{display:flex;align-items:center;justify-content:center;min-height:100vh;background:#e3e5e4}
+.title-inner{max-width:520px;width:100%;margin:0 auto;padding:56px 32px 48px;text-align:center;background:#e3e5e4}
+#logo-canvas{image-rendering:pixelated;margin-bottom:16px;width:320px;height:107px}
+.tagline{font-size:11px;letter-spacing:.18em;color:#8a8b8a;margin-bottom:20px;font-style:italic}
+.title-divider{width:100px;height:1px;background:#48494b;margin:20px auto}
+.sub-text{font-size:11px;color:#8a8b8a;line-height:2;margin-bottom:24px}
+.wallet-addr{font-size:10px;color:#48494b;margin-bottom:12px;word-break:break-all;font-weight:700}
+.btn-row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-bottom:14px}
+.btn-row button{padding:12px 24px;font-size:11px}
+.fine-print{font-size:9px;color:#bbb;letter-spacing:.1em}
+.demo-pill{display:none;font-size:9px;letter-spacing:.1em;border:1px solid #48494b;padding:3px 8px;margin-top:10px;display:inline-block}
 .demo-pill:not(.show){display:none!important}
 .demo-pill.show{display:inline-block}
 

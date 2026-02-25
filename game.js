@@ -2,7 +2,7 @@
 // Multi-map • Walking animation • Quest system • Story-driven NPCs • Animated battles
 
 import { fetchNormieMeta, fetchNormiePixels, makeDemoNormie, calcStats } from './normie-api.js';
-import { connectWallet, loadWalletNormies, loadDemoNormies } from './wallet.js';
+import { connectWallet, loadWalletNormies, loadDemoNormies, detectWallets } from './wallet.js';
 import { T, getTile, tickTiles, TILE_SIZE, tilesReady } from './tiles.js';
 import { MAP_BUILDERS, isTileBlocked, MAP_SPAWN } from './mapgen.js';
 import { QUESTS, ITEMS, NPC_DEFS, ENEMIES, MAPS, LORE } from './story.js';
@@ -1242,21 +1242,74 @@ function showEnding() {
 function drawTitleLogo() {
   const c=document.getElementById('logo-canvas');
   if(!c) return;
+  const W=320, H=107;
+  c.width=W; c.height=H;
   const ctx=c.getContext('2d');
-  c.width=240; c.height=80;
-  ctx.fillStyle='#e3e5e4'; ctx.fillRect(0,0,240,80);
-  // Draw THE PIXEL WAR title in pixel font
+  ctx.imageSmoothingEnabled=false;
+  ctx.fillStyle='#e3e5e4'; ctx.fillRect(0,0,W,H);
   ctx.fillStyle='#48494b';
-  // Large pixel letters (simplified)
-  const letters='PIXEL WAR';
-  for(let i=0;i<letters.length;i++){
-    const lx=10+i*26, ly=20;
-    if(letters[i]===' ') continue;
-    drawPixelLetter(ctx, letters[i], lx, ly, 3);
-  }
+
+  // "THE PIXEL WAR" — two lines, large pixel font
+  // Line 1: "THE" small above
+  const small = {
+    'T':[[1,1,1],[0,1,0],[0,1,0],[0,1,0],[0,1,0]],
+    'H':[[1,0,1],[1,0,1],[1,1,1],[1,0,1],[1,0,1]],
+    'E':[[1,1,1],[1,0,0],[1,1,0],[1,0,0],[1,1,1]],
+  };
+  'THE'.split('').forEach((ch,i)=>{
+    const g=small[ch]||small['T'];
+    g.forEach((row,ry)=>row.forEach((on,rx)=>{
+      if(on) ctx.fillRect(14+i*14+rx*2, 8+ry*2, 2,2);
+    }));
+  });
+
+  // Divider line under "THE"
+  ctx.fillRect(14, 22, 32, 1);
+
+  // Line 2: "PIXEL" big
+  const BIG = {
+    'P':[[1,1,1,0],[1,0,0,1],[1,1,1,0],[1,0,0,0],[1,0,0,0]],
+    'I':[[1,1,1],[0,1,0],[0,1,0],[0,1,0],[1,1,1]],
+    'X':[[1,0,0,1],[1,0,0,1],[0,1,1,0],[1,0,0,1],[1,0,0,1]],
+    'E':[[1,1,1,0],[1,0,0,0],[1,1,1,0],[1,0,0,0],[1,1,1,0]],
+    'L':[[1,0,0],[1,0,0],[1,0,0],[1,0,0],[1,1,1]],
+    'W':[[1,0,1,0,1],[1,0,1,0,1],[1,0,1,0,1],[1,1,0,1,1],[1,0,0,0,1]],
+    'A':[[0,1,1,0],[1,0,0,1],[1,1,1,1],[1,0,0,1],[1,0,0,1]],
+    'R':[[1,1,1,0],[1,0,0,1],[1,1,1,0],[1,1,0,0],[1,0,1,0]],
+  };
+  const S=5; // pixel scale
+  const words = [['P','I','X','E','L'],['W','A','R']];
+  const wordWidths = words.map(w=>w.reduce((a,ch)=>a+(BIG[ch]?.[0]?.length||3)+1,0)-1);
+  const totalW = wordWidths[0]*S + 16 + wordWidths[1]*S;
+  let startX = Math.floor((W - totalW)/2);
+
+  // Draw PIXEL
+  let cx = startX;
+  'PIXEL'.split('').forEach(ch=>{
+    const g=BIG[ch];
+    if(!g){cx+=4*S;return;}
+    g.forEach((row,ry)=>row.forEach((on,rx)=>{
+      if(on) ctx.fillRect(cx+rx*S, 30+ry*S, S,S);
+    }));
+    cx+=(g[0].length+1)*S;
+  });
+
+  // Draw WAR (slightly offset right with gap)
+  cx += 16;
+  'WAR'.split('').forEach(ch=>{
+    const g=BIG[ch];
+    if(!g){cx+=4*S;return;}
+    g.forEach((row,ry)=>row.forEach((on,rx)=>{
+      if(on) ctx.fillRect(cx+rx*S, 30+ry*S, S,S);
+    }));
+    cx+=(g[0].length+1)*S;
+  });
+
   // Subtitle
-  ctx.font='7px monospace'; ctx.textAlign='center';
-  ctx.fillText('A NORMIES ADVENTURE', 120, 72);
+  ctx.font='bold 10px monospace';
+  ctx.textAlign='center';
+  ctx.fillStyle='#8a8b8a';
+  ctx.fillText('A  N O R M I E S  A D V E N T U R E', W/2, 97);
 }
 
 function drawPixelLetter(ctx, ch, x, y, s) {
