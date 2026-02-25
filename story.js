@@ -355,7 +355,7 @@ export const MAPS = {
   overworld: {
     id:'overworld', name:'Render Fields',
     width:48, height:48,
-    encounterRate: 0.12,
+    encounterRate: 0.045,
     darkGrassRate: 0.22,
     music: 'field',
     ambience: 'open',
@@ -383,7 +383,7 @@ export const MAPS = {
   cave: {
     id:'cave', name:'Cave of First Bits',
     width:22, height:18,
-    encounterRate: 0.18,
+    encounterRate: 0.07,
     music: 'cave',
     ambience: 'dark',
     requiredItem: 'render_key',
@@ -395,7 +395,7 @@ export const MAPS = {
   void_lands: {
     id:'void_lands', name:'Corrupted Lands',
     width:32, height:28,
-    encounterRate: 0.25,
+    encounterRate: 0.09,
     voidDamage: true,
     music: 'void',
     ambience: 'corrupted',
@@ -407,7 +407,7 @@ export const MAPS = {
   citadel: {
     id:'citadel', name:'Void Citadel',
     width:20, height:18,
-    encounterRate: 0.20,
+    encounterRate: 0.08,
     voidDamage: false,
     music: 'final',
     ambience: 'dark',

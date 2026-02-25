@@ -239,12 +239,16 @@ button{
 .log-normal{color:#8a8b8a}.log-em{color:#48494b}.log-big{color:#48494b;font-weight:700}.log-crit{color:#48494b;font-weight:700;letter-spacing:.06em}.log-lore{color:#aaa;font-style:italic;font-size:9px}
 .bat-actions{display:flex;flex-direction:column;gap:6px}
 .bat-action-label{font-size:8px;color:#8a8b8a;letter-spacing:.1em;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
-.bat-btns{display:flex;gap:6px;flex-wrap:wrap}
-.bat-btn{font-family:'Space Mono',monospace;font-size:9px;font-weight:700;letter-spacing:.06em;border:1px solid #48494b;padding:10px 12px;cursor:pointer;background:#48494b;color:#e3e5e4;transition:background 60ms;flex:1;min-width:60px;text-align:center;touch-action:manipulation}
+.bat-btns{display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px}
+.bat-btns .bat-btn:nth-child(4){grid-column:1/2}
+.bat-btns .bat-btn:nth-child(5){grid-column:2/4}
+.bat-btn{font-family:'Space Mono',monospace;font-size:9px;font-weight:700;letter-spacing:.06em;border:1px solid #48494b;padding:10px 10px;cursor:pointer;background:#48494b;color:#e3e5e4;transition:background 60ms;text-align:center;touch-action:manipulation;min-width:0}
 .bat-btn small{font-size:7px;font-weight:400;display:block;margin-top:1px;opacity:.7}
 .bat-btn.ghost{background:#e3e5e4;color:#48494b}
+.bat-btn.flee{background:#e3e5e4;color:#48494b;border-style:dashed;letter-spacing:.1em}
 .bat-btn:hover:not(:disabled){background:#2a2b2c;color:#e3e5e4;border-color:#2a2b2c}
-.bat-btn:disabled{background:#e3e5e4;color:#ccc;border-color:#ddd;cursor:default}
+.bat-btn.flee:hover:not(:disabled){background:#48494b;color:#e3e5e4}
+.bat-btn:disabled{background:#e3e5e4;color:#ccc;border-color:#ddd;cursor:default;opacity:.5}
 .bat-result{text-align:center;padding:60px 20px;display:flex;flex-direction:column;align-items:center}
 .result-title{font-size:36px;font-weight:700;letter-spacing:-.03em;margin-bottom:8px}
 .result-sub{font-size:10px;color:#8a8b8a;margin-bottom:4px}

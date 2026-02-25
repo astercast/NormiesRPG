@@ -355,9 +355,9 @@ function handleMovement(dt) {
   if (encTile.includes(tile) && G.encounterCooldown===0) {
     const mapCfg = MAPS[G.mapId];
     const base = mapCfg?.encounterRate||0;
-    const boost = (tile===T.DARK_GRASS||tile===T.VOID) ? 1.8 : 1.0;
+    const boost = (tile===T.DARK_GRASS||tile===T.VOID) ? 1.4 : 1.0;
     if (Math.random() < base*boost) {
-      G.encounterCooldown = 10;
+      G.encounterCooldown = 22;
       startEncounter();
       return;
     }
@@ -680,12 +680,16 @@ function renderBattle() {
   // Action bar
   const cur=fighters.find(f=>f.isPlayer&&f===fighters[turn]);
   const locked=G.battle.actionLocked||!cur||G.battle.over;
-  ['btn-atk','btn-skill','btn-ult','btn-bpot'].forEach(id=>
-    document.getElementById(id).disabled=locked);
+  ['btn-atk','btn-skill','btn-ult','btn-bpot','btn-flee'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.disabled=locked;
+  });
   if(cur){
     document.getElementById('btn-skill').disabled=locked||cur.mp<3;
     document.getElementById('btn-ult').disabled=locked||cur.mp<6;
     document.getElementById('btn-bpot').disabled=locked||(G.save.inventory.potion||0)<=0;
+    // Flee disabled for bosses
+    const fleeBtn=document.getElementById('btn-flee');
+    if(fleeBtn) fleeBtn.disabled=locked||(G.battle.enemy?.tier>=4);
     document.getElementById('bat-action-label').textContent=
       `${cur.name} — ATK:${cur.atkBasic} SKL:${cur.atkSkill} ULT:${cur.atkUltimate} | ${cur.hp}/${cur.maxHp}HP ${cur.mp}/${cur.maxMp}MP`;
   } else {
@@ -729,6 +733,38 @@ window.__battleAction = function(type) {
   if(!actor||!actor.isPlayer) return;
 
   G.battle.actionLocked=true;
+
+  if(type==='flee'){
+    // Flee chance: 65% base, reduced by enemy tier, impossible for bosses
+    const isBoss = enemy.tier >= 4;
+    if(isBoss){
+      bLog(`${enemy.name} won't let you escape!`,'log-big');
+      G.battle.actionLocked=false;
+      renderBattle();
+      setTimeout(()=>{ nextTurn(); }, 600);
+      return;
+    }
+    const fleeChance = Math.max(0.25, 0.70 - (enemy.tier||0)*0.1);
+    if(Math.random() < fleeChance){
+      bLog(`Got away safely!`,'log-em');
+      G.encounterCooldown = 18;
+      setTimeout(()=>{
+        G.battle=null;
+        document.getElementById('battle').classList.add('hidden');
+        renderHUD();
+      }, 800);
+    } else {
+      bLog(`Can't escape!`,'log-big');
+      G.battle.actionLocked=false;
+      renderBattle();
+      setTimeout(()=>{
+        G.battle.actionLocked=false;
+        if(checkBattleEnd()) return;
+        nextTurn();
+      }, 700);
+    }
+    return;
+  }
 
   if(type==='attack'){
     const {dmg,crit}=dealDamage(enemy,actor.atkBasic,enemy.def,actor.crit);
@@ -1576,6 +1612,8 @@ window.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('btn-skill').onclick =()=>window.__battleAction('skill');
   document.getElementById('btn-ult').onclick   =()=>window.__battleAction('ult');
   document.getElementById('btn-bpot').onclick  =()=>window.__battleAction('potion');
+  const fleeBtn=document.getElementById('btn-flee');
+  if(fleeBtn) fleeBtn.onclick=()=>window.__battleAction('flee');
   document.getElementById('btn-bat-world').onclick=()=>{
     if(G.battle){ G.battle=null; document.getElementById('battle').classList.add('hidden'); renderHUD(); }
   };
