@@ -2,32 +2,45 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-  <title>Normies RPG</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1"/>
+  <title>THE PIXEL WAR — Normies RPG</title>
   <link rel="icon" href="https://www.normies.art/favicon.ico"/>
-  <link rel="preconnect" href="https://fonts.googleapis.com"/>
-  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet"/>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js"></script>
   <link rel="stylesheet" href="./style.css"/>
 </head>
 <body>
 
-<!-- ══ TITLE SCREEN ══ -->
+<!-- ══ TITLE ══ -->
 <div id="screen-title" class="screen active">
   <div class="title-inner">
-    <div class="pixel-logo">
-      <canvas id="logo-canvas" width="200" height="80"></canvas>
-    </div>
-    <h1>NORMIES RPG</h1>
-    <p class="tagline">on-chain pixel adventure</p>
-    <hr/>
-    <p class="sub">Connect your wallet to play with your own Normies,<br/>or try Demo Mode to explore with random ones.</p>
+    <canvas id="logo-canvas" width="240" height="80"></canvas>
+    <p class="tagline">Every dot is a soul. They are coming for ours.</p>
+    <div class="title-divider"></div>
+    <p class="sub-text">
+      A Normies pixel RPG. Connect your wallet to play as your own on-chain Normies,<br>
+      or use Demo Mode to begin with random ones.
+    </p>
     <div id="wallet-addr" class="wallet-addr"></div>
     <div class="btn-row">
-      <button id="btn-connect" class="btn-primary">Connect MetaMask</button>
+      <button id="btn-connect" class="btn-primary">⬜ Connect Wallet</button>
       <button id="btn-demo" class="btn-ghost">Demo Mode</button>
     </div>
-    <p class="fine">Read-only · Never asked to sign</p>
+    <p class="fine-print">Read-only · Never sign anything</p>
+    <span id="demo-pill" class="demo-pill">DEMO</span>
+  </div>
+</div>
+
+<!-- ══ INTRO CUTSCENE ══ -->
+<div id="screen-intro" class="screen">
+  <div class="intro-inner">
+    <div class="intro-chapter">CHAPTER I</div>
+    <div id="intro-text" class="intro-text"></div>
+    <div id="intro-page" class="intro-page"></div>
+    <div class="intro-btns">
+      <button id="btn-intro-next" class="btn-primary">Continue →</button>
+      <button id="btn-intro-skip" class="btn-ghost">Skip</button>
+    </div>
   </div>
 </div>
 
@@ -36,24 +49,25 @@
   <div class="party-wrap">
     <div class="party-header">
       <button class="btn-back" id="btn-back-title">← Back</button>
-      <div>
-        <p class="label">Party Selection</p>
-        <h2 class="h2">YOUR NORMIES</h2>
+      <div class="party-header-mid">
+        <div class="label">Choose Your Party</div>
+        <div class="party-title">THE PIXEL WAR</div>
       </div>
       <div class="party-header-right">
-        <span id="demo-pill" class="demo-pill">DEMO</span>
+        <span class="label" id="party-count">0 / 5</span>
         <button id="btn-start" class="btn-primary" disabled>Enter World →</button>
       </div>
     </div>
 
-    <div class="party-slots" id="party-slots"></div>
-    <p class="slot-hint">Select up to 5 Normies · Click a slot to remove</p>
+    <div class="party-row">
+      <div class="party-slots" id="party-slots"></div>
+      <p class="slot-hint">Select up to 5 · Click slot to remove · Lead Normie walks the world</p>
+    </div>
 
-    <hr class="hr-dim"/>
+    <div class="hr-line"></div>
 
     <div class="grid-header">
-      <span class="label">Collection <span id="col-count"></span></span>
-      <span id="party-count" class="label">0 / 5 selected</span>
+      <span class="label">Your Collection <span id="col-count"></span></span>
     </div>
     <div id="normie-grid" class="normie-grid">
       <div class="grid-loading">Loading your Normies…</div>
@@ -62,111 +76,166 @@
 </div>
 
 <!-- ══ GAME ══ -->
-<div id="screen-game" class="screen">
-  <!-- Overworld canvas -->
+<div id="screen-game" class="screen" style="display:none">
   <canvas id="world-canvas"></canvas>
 
-  <!-- Zone / step indicator -->
+  <!-- Zone / step bar -->
   <div id="zone-bar">
-    <span id="zone-name">NORMIE PLAINS</span>
+    <span id="zone-name">YOUR HOME</span>
     <span id="step-count">0 steps</span>
+    <span class="zone-hint">WASD/↑↓←→ move · E interact · I menu</span>
   </div>
 
-  <!-- HUD bottom bar -->
+  <!-- HUD -->
   <div id="hud">
-    <div id="hud-party"></div>
-    <div id="hud-side">
-      <div class="hud-gold-wrap">
-        <span class="hud-gold-icon">◆</span>
-        <span id="hud-gold">0</span>
+    <div id="hud-lead">
+      <div id="hud-lead-name" class="hud-name">—</div>
+      <div id="hud-lead-type" class="hud-type">—</div>
+      <div class="hud-bars">
+        <div class="bar-track"><div id="hud-hp-bar" class="bar-hp" style="width:100%"></div></div>
+        <div class="bar-track"><div id="hud-mp-bar" class="bar-mp" style="width:100%"></div></div>
       </div>
-      <div id="hud-pots" class="hud-pots">⬜ ×<span id="hud-pot-count">3</span></div>
-      <div class="controls-hint">WASD / ↑↓←→<br/>E interact · I bag</div>
+      <div id="hud-hp-val" class="hud-val">—</div>
+    </div>
+    <div id="hud-right">
+      <div id="hud-gold" class="hud-gold">0</div>
+      <div id="hud-pot" class="hud-pot">⬜×3</div>
+      <button id="hud-menu-btn" class="hud-btn" onclick="document.getElementById('btn-open-menu')?.click()">≡</button>
     </div>
   </div>
 
   <!-- Dialogue box -->
   <div id="dialogue" class="dialogue hidden">
-    <div id="dlg-speaker" class="dlg-speaker"></div>
-    <div id="dlg-text" class="dlg-text"></div>
-    <div class="dlg-close">[ E or click to close ]</div>
+    <div class="dlg-inner">
+      <div id="dlg-portrait" class="dlg-portrait" style="display:none"></div>
+      <div class="dlg-text-area">
+        <div id="dlg-speaker" class="dlg-speaker"></div>
+        <div id="dlg-text" class="dlg-text"></div>
+        <div class="dlg-footer">
+          <span id="dlg-page" class="dlg-page"></span>
+          <span class="dlg-prompt">[ E / CLICK ]</span>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- Battle overlay -->
   <div id="battle" class="overlay hidden">
     <div class="battle-wrap">
-
-      <!-- Result screen -->
+      <!-- Result -->
       <div id="bat-result" class="bat-result hidden">
-        <div id="bat-result-title" class="bat-result-title"></div>
-        <div id="bat-result-sub" class="bat-result-sub"></div>
-        <div id="bat-result-gold" class="bat-result-gold"></div>
-        <div class="bat-result-btns">
+        <div id="bat-result-title" class="result-title"></div>
+        <div id="bat-result-sub" class="result-sub"></div>
+        <div id="bat-result-gold" class="result-gold"></div>
+        <div class="result-btns">
           <button id="btn-bat-world" class="btn-primary">Return to World</button>
           <button id="btn-bat-party" class="btn-ghost">Change Party</button>
         </div>
       </div>
 
-      <!-- Battle main -->
+      <!-- Main battle -->
       <div id="bat-main">
         <div class="bat-header">
           <div>
-            <div class="bat-zone-label" id="bat-zone"></div>
-            <div class="bat-encounter-word">ENCOUNTER</div>
+            <div id="bat-zone" class="bat-zone"></div>
+            <div class="bat-title">ENCOUNTER</div>
           </div>
-          <div id="bat-turn-info" class="bat-turn-info">—</div>
+          <div id="bat-round" class="bat-round">Round 1</div>
         </div>
 
         <!-- Arena -->
         <div class="arena" id="arena">
+          <!-- Party left -->
           <div id="bat-party" class="bat-party"></div>
-          <div id="bat-enemy" class="bat-enemy">
-            <canvas id="enemy-canvas" width="96" height="96"></canvas>
+
+          <!-- VS divider -->
+          <div class="arena-vs">VS</div>
+
+          <!-- Enemy right -->
+          <div class="bat-enemy-wrap">
+            <canvas id="enemy-canvas" width="72" height="72"></canvas>
             <div id="enemy-name" class="enemy-name"></div>
             <div id="enemy-hp-text" class="enemy-hp-text"></div>
-            <div class="enemy-bar-wrap"><div id="enemy-hp-bar" class="enemy-hp-bar"></div></div>
-            <div id="enemy-lore" class="enemy-lore"></div>
+            <div class="enemy-bar-track"><div id="enemy-hp-bar" class="enemy-hp-bar"></div></div>
           </div>
         </div>
 
-        <!-- Log -->
+        <!-- Enemy lore (below arena) -->
+        <div id="enemy-lore-text" class="enemy-lore"></div>
+
+        <!-- Battle log -->
         <div id="bat-log" class="bat-log"></div>
 
         <!-- Actions -->
         <div class="bat-actions">
-          <div id="bat-action-label" class="bat-action-label">Choose action</div>
+          <div id="bat-action-label" class="bat-action-label">—</div>
           <div class="bat-btns">
-            <button id="btn-atk"   class="bat-btn">Attack<br/><small id="lbl-atk"></small></button>
-            <button id="btn-skill" class="bat-btn ghost">Skill<br/><small id="lbl-skill"></small></button>
-            <button id="btn-ult"   class="bat-btn ghost">Ultimate<br/><small id="lbl-ult"></small></button>
-            <button id="btn-pot"   class="bat-btn ghost">Potion<br/><small id="lbl-pot"></small></button>
+            <button id="btn-atk"   class="bat-btn">Attack<small id="lbl-atk"></small></button>
+            <button id="btn-skill" class="bat-btn ghost">Skill<small id="lbl-skill"></small></button>
+            <button id="btn-ult"   class="bat-btn ghost">Ultimate<small id="lbl-ult"></small></button>
+            <button id="btn-bpot"  class="bat-btn ghost">Potion<small id="lbl-bpot"></small></button>
           </div>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- Inventory / bag overlay -->
-  <div id="bag" class="overlay hidden">
-    <div class="bag-wrap">
-      <button class="btn-back" id="btn-close-bag">← Back to World</button>
-      <h2 class="h2">BAG</h2>
-
-      <div class="bag-section">
-        <div class="label">Items</div>
-        <div id="bag-items" class="bag-items"></div>
+  <!-- Menu Overlay (I key) -->
+  <div id="menu-overlay" class="overlay hidden">
+    <div class="menu-wrap">
+      <div class="menu-header">
+        <div class="menu-tabs">
+          <button class="menu-tab active" data-tab="inventory">Items</button>
+          <button class="menu-tab" data-tab="quests">Quests</button>
+          <button class="menu-tab" data-tab="party">Party</button>
+          <button class="menu-tab" data-tab="journal">Journal</button>
+        </div>
+        <button id="btn-close-menu" class="btn-close">✕</button>
       </div>
-
-      <div class="bag-section">
-        <div class="label">Party</div>
-        <div id="bag-party" class="bag-party-list"></div>
+      <div class="menu-gold-bar">
+        <span id="menu-gold" class="menu-gold">◆ 0 Gold</span>
       </div>
-
-      <div class="bag-section">
-        <div class="label">Journal</div>
-        <div id="bag-journal" class="bag-journal"></div>
+      <div class="menu-content">
+        <div id="menu-inv"    class="menu-tab-content"></div>
+        <div id="menu-quests" class="menu-tab-content" style="display:none"></div>
+        <div id="menu-party"  class="menu-tab-content" style="display:none"></div>
+        <div id="menu-journal" class="menu-tab-content" style="display:none"></div>
       </div>
     </div>
+  </div>
+
+  <!-- Shop overlay -->
+  <div id="shop" class="overlay hidden">
+    <div class="shop-wrap">
+      <div class="shop-header">
+        <span class="shop-title">PIXEL SHOP</span>
+        <span id="shop-gold" class="shop-gold">0G</span>
+        <button id="btn-close-shop" class="btn-close">✕</button>
+      </div>
+      <div id="shop-items" class="shop-items"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ ENDING ══ -->
+<div id="screen-ending" class="screen">
+  <div class="ending-inner">
+    <div class="ending-chapter">EPILOGUE</div>
+    <h2 class="ending-title">THE GRID IS SAVED.</h2>
+    <p class="ending-text">
+      NULLBYTE has fallen. The pixels he consumed pour back into the world — 
+      millions of tiny squares of light, each one a restored soul.<br><br>
+      Normie <span id="ending-normie-id">#0001</span> stands at the center 
+      of the relit Grid, the Render Flame still warm in hand.<br><br>
+      Not all battles are over. The edges of the chain are still dark.<br>
+      But today, the first pixel was relit. And that changes everything.
+    </p>
+    <div class="ending-stats">
+      <div>Battles Won: <span id="ending-battles">0</span></div>
+      <div>Steps Taken: <span id="ending-steps">0</span></div>
+      <div>Gold Earned: <span id="ending-gold">0</span></div>
+    </div>
+    <button id="btn-ending-play-again" class="btn-primary">Play Again</button>
   </div>
 </div>
 
