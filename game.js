@@ -1229,8 +1229,8 @@ function renderHUD() {
 // ENDING
 // ═══════════════════════════════════════════════════════════
 function showEnding() {
-  document.getElementById('screen-ending').classList.add('active');
-  document.getElementById('ending-normie-id').textContent='#'+G.party[0]?.id||'0001';
+  showScreen('ending');
+  document.getElementById('ending-normie-id').textContent='#'+(G.party[0]?.id||'0001');
   document.getElementById('ending-battles').textContent=G.save.battlesWon;
   document.getElementById('ending-steps').textContent=G.save.steps;
   document.getElementById('ending-gold').textContent=G.save.gold;
@@ -1282,8 +1282,8 @@ function drawPixelLetter(ctx, ch, x, y, s) {
 function showIntro() {
   const lines = LORE.intro;
   let idx=0;
-  const el=document.getElementById('screen-intro');
-  el.classList.add('active');
+  showScreen('intro'); // hides all other screens first
+
   const textEl=document.getElementById('intro-text');
   const pageEl=document.getElementById('intro-page');
 
@@ -1296,13 +1296,13 @@ function showIntro() {
   document.getElementById('btn-intro-next').onclick=()=>{
     idx++;
     if(idx>=lines.length){
-      el.classList.remove('active');
       showScreen('party');
+      renderSlots(); renderGrid();
     } else showLine();
   };
   document.getElementById('btn-intro-skip').onclick=()=>{
-    el.classList.remove('active');
     showScreen('party');
+    renderSlots(); renderGrid();
   };
 }
 
@@ -1410,22 +1410,91 @@ window.addEventListener('DOMContentLoaded', async () => {
   initQuestSave();
   startQuest('prologue');
 
+  // Detect wallets on load and update button label
+  function refreshWalletBtn() {
+    const btn=document.getElementById('btn-connect');
+    const wallets=detectWallets();
+    if(wallets.length===0){
+      btn.textContent='No Wallet Found';
+      btn.title='Install MetaMask, Coinbase Wallet, or another Web3 wallet';
+    } else {
+      btn.textContent=`⬜ Connect ${wallets[0].name}`;
+    }
+  }
+  refreshWalletBtn();
+  // Re-check after a tick (wallets may inject late)
+  setTimeout(refreshWalletBtn, 800);
+
   // Buttons
   document.getElementById('btn-connect').onclick=async()=>{
     const btn=document.getElementById('btn-connect');
+    const wallets=detectWallets();
+    if(wallets.length===0){
+      // No wallet installed — show helpful message
+      showWalletHelp();
+      return;
+    }
+    // If multiple wallets, show picker; otherwise connect directly
+    if(wallets.length>1){
+      showWalletPicker(wallets, async(walletId)=>{
+        await doConnect(walletId);
+      });
+    } else {
+      await doConnect(wallets[0].id);
+    }
+  };
+
+  async function doConnect(walletId) {
+    const btn=document.getElementById('btn-connect');
     btn.disabled=true; btn.textContent='Connecting…';
     try{
-      const {provider,address}=await connectWallet();
+      const {provider,address,walletName}=await connectWallet(walletId);
       G.demo=false;
-      document.getElementById('wallet-addr').textContent=address.slice(0,6)+'…'+address.slice(-4);
+      document.getElementById('wallet-addr').textContent=
+        `${walletName}: ${address.slice(0,6)}…${address.slice(-4)}`;
       btn.textContent='Loading NFTs…';
       G.collection=await loadWalletNormies(address,provider,col=>{
         G.collection=col; col.forEach(buildBattleSprite); renderGrid();
       });
       G.collection.forEach(buildBattleSprite);
-      showIntro();
-    }catch(e){btn.disabled=false;btn.textContent='Failed — retry';console.error(e);}
-  };
+      if(G.collection.length===0){
+        // No Normies — offer demo
+        btn.textContent='No Normies Found';
+        btn.disabled=false;
+        document.getElementById('wallet-addr').textContent+=
+          ' · No Normies found — try Demo Mode';
+      } else {
+        showIntro();
+      }
+    }catch(e){
+      btn.disabled=false;
+      refreshWalletBtn();
+      if(e.message==='NO_WALLET') showWalletHelp();
+      else if(e.code===4001) btn.textContent='Rejected — try again';
+      else { btn.textContent='Failed — retry'; console.error(e); }
+    }
+  }
+
+  function showWalletHelp() {
+    const el=document.getElementById('wallet-help');
+    if(el) el.style.display='block';
+  }
+
+  function showWalletPicker(wallets, cb) {
+    const overlay=document.createElement('div');
+    overlay.className='wallet-picker-overlay';
+    overlay.innerHTML=`<div class="wallet-picker">
+      <div class="wp-title">Choose Wallet</div>
+      ${wallets.map(w=>`<button class="wp-btn btn-ghost" data-id="${w.id}">${w.name}</button>`).join('')}
+      <button class="wp-cancel btn-back">Cancel</button>
+    </div>`;
+    document.body.appendChild(overlay);
+    overlay.querySelectorAll('.wp-btn').forEach(b=>{
+      b.onclick=()=>{ overlay.remove(); cb(b.dataset.id); };
+    });
+    overlay.querySelector('.wp-cancel').onclick=()=>overlay.remove();
+    overlay.onclick=(e)=>{ if(e.target===overlay) overlay.remove(); };
+  }
 
   document.getElementById('btn-demo').onclick=async()=>{
     G.demo=true; G.collection=[];
@@ -1501,9 +1570,8 @@ function startGame() {
   G.camX=G.px*TS; G.camY=G.py*TS;
 
   // Show game screen & start loop
-  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
-  document.getElementById('screen-game').classList.add('active');
-  document.getElementById('screen-game').style.display='block';
+  showScreen('game');
+  document.getElementById('screen-game').style.display='block'; // canvas needs block not flex
   G.screen='game';
   renderHUD();
 

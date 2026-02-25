@@ -36,7 +36,8 @@ button{font-family:'Space Mono',monospace;font-size:10px;font-weight:700;letter-
 .demo-pill.show{display:inline-block}
 
 /* ── INTRO CUTSCENE */
-#screen-intro{background:#48494b;display:flex;align-items:center;justify-content:center}
+#screen-intro{background:#48494b}
+#screen-intro.active{display:flex;align-items:center;justify-content:center}
 .intro-inner{max-width:600px;padding:60px 32px;text-align:center}
 .intro-chapter{font-size:9px;letter-spacing:.3em;color:#8a8b8a;margin-bottom:20px}
 .intro-text{font-size:14px;line-height:2.1;color:#e3e5e4;min-height:100px;font-style:italic;white-space:pre-wrap}
@@ -242,7 +243,8 @@ button{font-family:'Space Mono',monospace;font-size:10px;font-weight:700;letter-
 .btn-buy{padding:5px 10px;font-size:8px;flex-shrink:0}
 
 /* ── ENDING */
-#screen-ending{background:#48494b;display:flex;align-items:center;justify-content:center}
+#screen-ending{background:#48494b}
+#screen-ending.active{display:flex;align-items:center;justify-content:center}
 .ending-inner{max-width:520px;padding:60px 32px;text-align:center;color:#e3e5e4}
 .ending-chapter{font-size:8px;letter-spacing:.3em;color:#8a8b8a;margin-bottom:16px}
 .ending-title{font-size:28px;font-weight:700;letter-spacing:-.02em;margin-bottom:20px}
@@ -252,3 +254,13 @@ button{font-family:'Space Mono',monospace;font-size:10px;font-weight:700;letter-
 
 ::-webkit-scrollbar{width:3px}
 ::-webkit-scrollbar-thumb{background:#aaa}
+
+/* ── WALLET HELP & PICKER */
+.wallet-help{font-size:10px;color:#c55;line-height:1.8;margin-bottom:12px;padding:8px 12px;border:1px solid #fcc;background:#fff8f8}
+.wallet-help a{color:#48494b;text-decoration:underline}
+.wallet-picker-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:200;display:flex;align-items:center;justify-content:center}
+.wallet-picker{background:#e3e5e4;border:1px solid #48494b;padding:24px;min-width:220px;text-align:center}
+.wp-title{font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:#8a8b8a;margin-bottom:16px}
+.wp-btn{display:block;width:100%;margin-bottom:8px;padding:10px 16px;font-size:10px}
+.wp-cancel{display:block;margin:8px auto 0;font-size:9px;color:#aaa;background:none;border:none;cursor:pointer;letter-spacing:.1em}
+.wp-cancel:hover{color:#48494b}
