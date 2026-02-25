@@ -9,8 +9,8 @@ import { QUESTS, ITEMS, NPC_DEFS, ENEMIES, MAPS, LORE } from './story.js';
 import { buildNpcSprite, buildEnemySprite, buildPlayerSprite, buildPartyBattleSprite } from './sprites.js';
 
 const TS  = TILE_SIZE;   // 16px native
-const SCL = 3;           // 3× scale → 48px per tile, fills viewport
-const TSS = TS * SCL;    // 48px rendered tile size
+const SCL = 4;           // 4× scale → 64px per tile
+const TSS = TS * SCL;    // 64px rendered tile size
 
 // ═══════════════════════════════════════════════════════════
 // GLOBAL STATE
@@ -97,25 +97,160 @@ function initQuestSave() {
 }
 
 // ═══════════════════════════════════════════════════════════
-// CANVAS
+// PIXI RENDERER
 // ═══════════════════════════════════════════════════════════
-let canvas, ctx, hudCanvas, hudCtx;
+let pixiApp = null;
 let W = 0, H = 0;
 let raf = null, lastT = 0;
 
+// PixiJS scene graph layers
+let groundLayer    = null;   // floor tiles
+let objectLayer    = null;   // trees, walls, roofs (overlap player)
+let spriteLayer    = null;   // player + NPCs (Y-sorted)
+let shadowLayer    = null;   // drop shadows under sprites
+let lightLayer     = null;   // darkness mask + torch glow
+let uiLayer        = null;   // notifications, quest tracker
+
+// Tile texture cache
+const tileTexCache = {};
+// Sprite display object pools
+const npcSprites   = {};    // npcId → PIXI.Sprite
+let   playerPIXI   = null;  // PIXI.Sprite for player
+let   shadowGfx    = null;  // PIXI.Graphics for drop shadows
+let   lightGfx     = null;  // PIXI.Graphics for light mask
+let   questText    = null;  // PIXI.Text quest tracker
+let   notifText    = null;  // PIXI.Text notification
+let   notifBg      = null;  // PIXI.Graphics notification bg
+let   fadeRect     = null;  // PIXI.Graphics for map fade
+
+// Zone colour-matrix tints
+const ZONE_TINTS = {
+  home:       [1.05, 1.0,  0.9,  0],   // warm indoor
+  overworld:  [1.0,  1.02, 0.95, 0],   // subtle warm green
+  town:       [1.02, 1.0,  1.0,  0],   // neutral
+  cave:       [0.7,  0.8,  1.1,  0],   // cold blue-grey
+  void_lands: [0.75, 0.7,  1.1,  0],   // sick purple tint
+  citadel:    [0.6,  0.6,  1.15, 0],   // deep void blue
+};
+let colorFilter = null;
+
 function initCanvas() {
-  canvas = document.getElementById('world-canvas');
-  ctx = canvas.getContext('2d');
-  ctx.imageSmoothingEnabled = false;
-  resizeCanvas();
+  const container = document.getElementById('world-canvas');
+  W = window.innerWidth;
+  H = window.innerHeight;
+
+  pixiApp = new PIXI.Application({
+    width: W,
+    height: H,
+    backgroundColor: 0x1a1b1c,
+    antialias: false,
+    resolution: window.devicePixelRatio || 1,
+    autoDensity: true,
+  });
+  // Replace the plain canvas element with the pixi canvas
+  container.parentNode.replaceChild(pixiApp.view, container);
+  pixiApp.view.id = 'world-canvas';
+
+  // Scene graph
+  groundLayer  = new PIXI.Container();
+  objectLayer  = new PIXI.Container();
+  shadowLayer  = new PIXI.Container();
+  spriteLayer  = new PIXI.Container();
+  lightLayer   = new PIXI.Container();
+  uiLayer      = new PIXI.Container();
+
+  pixiApp.stage.addChild(groundLayer);
+  pixiApp.stage.addChild(objectLayer);
+  pixiApp.stage.addChild(shadowLayer);
+  pixiApp.stage.addChild(spriteLayer);
+  pixiApp.stage.addChild(lightLayer);
+  pixiApp.stage.addChild(uiLayer);
+
+  // Colour filter applied to world layers (not UI)
+  colorFilter = new PIXI.ColorMatrixFilter();
+  groundLayer.filters  = [colorFilter];
+  objectLayer.filters  = [colorFilter];
+  shadowLayer.filters  = [colorFilter];
+  spriteLayer.filters  = [colorFilter];
+
+  // Persistent graphics objects
+  lightGfx  = new PIXI.Graphics();
+  lightLayer.addChild(lightGfx);
+
+  fadeRect = new PIXI.Graphics();
+  fadeRect.beginFill(0x000000, 1);
+  fadeRect.drawRect(0, 0, W, H);
+  fadeRect.endFill();
+  fadeRect.alpha = 0;
+  uiLayer.addChild(fadeRect);
+
+  // Notification text + bg
+  notifBg   = new PIXI.Graphics();
+  notifText = new PIXI.Text('', {
+    fontFamily: 'Space Mono, monospace',
+    fontSize: 11,
+    fontWeight: 'bold',
+    fill: 0xe3e5e4,
+  });
+  notifText.anchor.set(0.5, 0.5);
+  uiLayer.addChild(notifBg);
+  uiLayer.addChild(notifText);
+
+  // Quest tracker text
+  questText = new PIXI.Text('', {
+    fontFamily: 'Space Mono, monospace',
+    fontSize: 9,
+    fill: 0xe3e5e4,
+  });
+  questText.anchor.set(1, 0);
+  uiLayer.addChild(questText);
+
+  // Shadows layer graphics
+  shadowGfx = new PIXI.Graphics();
+  shadowLayer.addChild(shadowGfx);
+
   window.addEventListener('resize', resizeCanvas);
+  pixiApp.ticker.stop(); // we drive the loop ourselves
 }
 
 function resizeCanvas() {
-  W = canvas.width  = window.innerWidth;
-  H = canvas.height = window.innerHeight;
-  if (ctx) ctx.imageSmoothingEnabled = false;
+  W = window.innerWidth;
+  H = window.innerHeight;
+  if (pixiApp) {
+    pixiApp.renderer.resize(W, H);
+    if (fadeRect) { fadeRect.clear(); fadeRect.beginFill(0x000000,1); fadeRect.drawRect(0,0,W,H); fadeRect.endFill(); }
+  }
 }
+
+// Convert a canvas element (from tile_data / sprites) to a PIXI Texture
+function canvasToTexture(canvas) {
+  return PIXI.Texture.from(canvas);
+}
+
+// Animated tile IDs that change frame each tick
+const ANIM_TILES = new Set([16, 19]); // WATER=16, VOID=19
+
+// Get or create a PIXI Texture for a tile id
+function getPixiTile(tileId) {
+  const img = getTile(tileId);
+  if (!img) return null;
+  // Animated tiles: re-create texture from current frame canvas
+  if (ANIM_TILES.has(tileId)) {
+    const tex = PIXI.Texture.from(img);
+    tex.baseTexture.scaleMode = PIXI.SCALE_MODES.NEAREST;
+    return tex;
+  }
+  // Static tiles: cache by source
+  const key = img.src || img.currentSrc || (img.tagName + tileId);
+  if (tileTexCache[key]) return tileTexCache[key];
+  const tex = PIXI.Texture.from(img);
+  tex.baseTexture.scaleMode = PIXI.SCALE_MODES.NEAREST;
+  tileTexCache[key] = tex;
+  return tex;
+}
+
+// Tiles that should render ABOVE the player (overlap layer)
+const OVERLAP_TILES = new Set([11,12,13,4,1,20,18]); // TREE,HOUSE_WALL,ROOF,BOOKSHELF,BED_WALL,WALL,CAVE_WALL
 
 // ═══════════════════════════════════════════════════════════
 // INPUT
@@ -146,6 +281,22 @@ function loadMap(mapId, spawnX, spawnY) {
   G.py = spawnY !== undefined ? spawnY : MAP_SPAWN[mapId].y;
   G.encounterCooldown = 8;
   G.save.visitedMaps[mapId] = true;
+
+  // Clear PixiJS tile sprite pool so new map tiles are freshly laid out
+  for (const key in tileSprites) {
+    const e = tileSprites[key];
+    if (e.ground) { groundLayer.removeChild(e.ground); e.ground.destroy(); }
+    if (e.object) { objectLayer.removeChild(e.object); e.object.destroy(); }
+    delete tileSprites[key];
+  }
+  // Clear NPC pixi sprites (they'll be recreated for the new map)
+  for (const id in npcSprites) {
+    const e = npcSprites[id];
+    if (e.spr) spriteLayer.removeChild(e.spr);
+    if (e.label) spriteLayer.removeChild(e.label);
+    if (e.labelBg) spriteLayer.removeChild(e.labelBg);
+    delete npcSprites[id];
+  }
 
   // Build NPC sprites for this map
   NPC_DEFS.filter(n => n.mapId === mapId).forEach(n => {
@@ -1082,15 +1233,181 @@ function renderQuests() {
 }
 
 // ═══════════════════════════════════════════════════════════
-// RENDERING
+// LIGHTING SYSTEM
 // ═══════════════════════════════════════════════════════════
+let lightCanvas = null, lightCtx2d = null, lightSprite = null;
+
+function drawLighting() {
+  const cx = W/2, cy = H/2;
+
+  // Lazy-create the offscreen light canvas
+  if (!lightCanvas || lightCanvas.width !== W || lightCanvas.height !== H) {
+    lightCanvas = document.createElement('canvas');
+    lightCanvas.width  = W;
+    lightCanvas.height = H;
+    lightCtx2d = lightCanvas.getContext('2d');
+
+    if (lightSprite) {
+      lightLayer.removeChild(lightSprite);
+      lightSprite.destroy(true);
+    }
+    const tex = PIXI.Texture.from(lightCanvas);
+    lightSprite = new PIXI.Sprite(tex);
+    lightSprite.blendMode = PIXI.BLEND_MODES.MULTIPLY;
+    lightLayer.addChild(lightSprite);
+  }
+
+  lightCtx2d.clearRect(0, 0, W, H);
+
+  if (G.mapId === 'cave' || G.mapId === 'citadel') {
+    const flicker = 1 + Math.sin(Date.now()*0.007)*0.035 + Math.sin(Date.now()*0.021)*0.018;
+    const radius  = TSS * 4.0 * flicker;
+
+    // Fill entire canvas near-black
+    lightCtx2d.fillStyle = 'rgba(0,0,0,0.94)';
+    lightCtx2d.fillRect(0, 0, W, H);
+
+    // Punch radial torch light using destination-out composite
+    lightCtx2d.save();
+    lightCtx2d.globalCompositeOperation = 'destination-out';
+    const grad = lightCtx2d.createRadialGradient(cx, cy, 0, cx, cy, radius);
+    grad.addColorStop(0,   'rgba(0,0,0,0.97)');
+    grad.addColorStop(0.35,'rgba(0,0,0,0.88)');
+    grad.addColorStop(0.7, 'rgba(0,0,0,0.55)');
+    grad.addColorStop(1.0, 'rgba(0,0,0,0.0)');
+    lightCtx2d.fillStyle = grad;
+    lightCtx2d.fillRect(0, 0, W, H);
+    lightCtx2d.restore();
+
+    // Warm amber tint on the bright center
+    lightCtx2d.save();
+    lightCtx2d.globalCompositeOperation = 'source-atop';
+    const warmGrad = lightCtx2d.createRadialGradient(cx, cy, 0, cx, cy, radius*0.6);
+    warmGrad.addColorStop(0,   'rgba(255,200,80,0.07)');
+    warmGrad.addColorStop(1,   'rgba(255,200,80,0.0)');
+    lightCtx2d.fillStyle = warmGrad;
+    lightCtx2d.fillRect(0, 0, W, H);
+    lightCtx2d.restore();
+
+  } else if (G.mapId === 'void_lands') {
+    const pulse  = 1 + Math.sin(Date.now()*0.004)*0.07;
+    const radius = TSS * 5.8 * pulse;
+
+    lightCtx2d.fillStyle = 'rgba(0,0,0,0.88)';
+    lightCtx2d.fillRect(0, 0, W, H);
+
+    lightCtx2d.save();
+    lightCtx2d.globalCompositeOperation = 'destination-out';
+    const grad = lightCtx2d.createRadialGradient(cx, cy, 0, cx, cy, radius);
+    grad.addColorStop(0,   'rgba(0,0,0,0.90)');
+    grad.addColorStop(0.5, 'rgba(0,0,0,0.60)');
+    grad.addColorStop(0.85,'rgba(0,0,0,0.20)');
+    grad.addColorStop(1.0, 'rgba(0,0,0,0.0)');
+    lightCtx2d.fillStyle = grad;
+    lightCtx2d.fillRect(0, 0, W, H);
+    lightCtx2d.restore();
+
+    // Sickly purple tint at edge
+    lightCtx2d.save();
+    lightCtx2d.globalCompositeOperation = 'source-atop';
+    const edgeGrad = lightCtx2d.createRadialGradient(cx, cy, radius*0.3, cx, cy, radius);
+    edgeGrad.addColorStop(0, 'rgba(80,0,160,0.0)');
+    edgeGrad.addColorStop(1, 'rgba(80,0,160,0.12)');
+    lightCtx2d.fillStyle = edgeGrad;
+    lightCtx2d.fillRect(0, 0, W, H);
+    lightCtx2d.restore();
+
+  } else {
+    // Overworld/home/town: soft vignette only
+    const vigR = Math.max(W, H) * 0.8;
+    lightCtx2d.fillStyle = 'rgba(0,0,0,0)';
+    lightCtx2d.fillRect(0, 0, W, H);
+
+    lightCtx2d.save();
+    lightCtx2d.globalCompositeOperation = 'source-over';
+    const vg = lightCtx2d.createRadialGradient(cx, cy, vigR*0.35, cx, cy, vigR);
+    vg.addColorStop(0, 'rgba(0,0,0,0)');
+    vg.addColorStop(1, 'rgba(0,0,0,0.30)');
+    lightCtx2d.fillStyle = vg;
+    lightCtx2d.fillRect(0, 0, W, H);
+    lightCtx2d.restore();
+  }
+
+  // Update the pixi sprite texture from the canvas
+  if (lightSprite && lightSprite.texture) {
+    lightSprite.texture.baseTexture.resource.source = lightCanvas;
+    lightSprite.texture.baseTexture.update();
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// PIXI RENDERING
+// ═══════════════════════════════════════════════════════════
+
+// Tile display object pool — reused across frames
+const tileSprites = {}; // key "tx,ty" → {ground: Sprite, object: Sprite}
+
+// Apply zone colour-matrix tint
+function applyZoneTint(mapId) {
+  const t = ZONE_TINTS[mapId] || ZONE_TINTS.overworld;
+  colorFilter.matrix = [
+    t[0],0,0,0,t[3],
+    0,t[1],0,0,t[3],
+    0,0,t[2],0,t[3],
+    0,0,0,1,0,
+  ];
+}
+
+// Update or create a tile sprite in the correct layer
+function syncTileSprite(tx, ty, tileId, ox, oy) {
+  const key = `${tx},${ty}`;
+  const tex = getPixiTile(tileId);
+  const isOverlap = OVERLAP_TILES.has(tileId);
+  const layer = isOverlap ? objectLayer : groundLayer;
+
+  if (!tileSprites[key]) {
+    tileSprites[key] = { ground: null, object: null, lastId: -1, lastOverlap: null };
+  }
+  const entry = tileSprites[key];
+
+  // For animated tiles, always update the texture (frame changes each tick)
+  if (ANIM_TILES.has(tileId)) {
+    const spr = isOverlap ? entry.object : entry.ground;
+    if (spr) {
+      const newTex = getPixiTile(tileId);
+      if (newTex) spr.texture = newTex;
+    }
+  }
+
+  // If tile type changed, tear down old sprite
+  if (entry.lastId !== tileId) {
+    if (entry.ground) { groundLayer.removeChild(entry.ground); entry.ground.destroy(); entry.ground = null; }
+    if (entry.object) { objectLayer.removeChild(entry.object); entry.object.destroy(); entry.object = null; }
+    if (tex) {
+      const spr = new PIXI.Sprite(tex);
+      spr.width = TSS; spr.height = TSS;
+      spr.texture.baseTexture.scaleMode = PIXI.SCALE_MODES.NEAREST;
+      layer.addChild(spr);
+      if (isOverlap) entry.object = spr; else entry.ground = spr;
+    }
+    entry.lastId = tileId;
+  }
+
+  const spr = isOverlap ? entry.object : entry.ground;
+  if (spr) {
+    spr.x = tx * TSS - ox;
+    spr.y = ty * TSS - oy;
+    spr.visible = true;
+  }
+}
+
 function render(dt) {
-  if (!ctx || !G.mapData) return;
+  if (!pixiApp || !G.mapData) return;
   tickTiles(dt);
 
   const { tiles, w, h } = G.mapData;
 
-  // Smooth camera in scaled pixel space
+  // Smooth camera
   const mapPxW = w*TSS, mapPxH = h*TSS;
   const tcx = Math.max(0, Math.min(G.px*TSS + TSS/2 - W/2, mapPxW - W));
   const tcy = Math.max(0, Math.min(G.py*TSS + TSS/2 - H/2, mapPxH - H));
@@ -1098,153 +1415,201 @@ function render(dt) {
   G.camY += (tcy - G.camY) * 0.14;
   const ox = Math.round(G.camX), oy = Math.round(G.camY);
 
-  // Background fill
-  const bg = (G.mapId==='cave'||G.mapId==='citadel') ? '#242526'
-           : G.mapId==='void_lands' ? '#1a1b1c' : '#b0b1b0';
-  ctx.fillStyle = bg;
-  ctx.fillRect(0, 0, W, H);
-  ctx.imageSmoothingEnabled = false;
+  // Background colour per zone
+  const bgCol = (G.mapId==='cave'||G.mapId==='citadel') ? 0x242526
+              : G.mapId==='void_lands' ? 0x1a1b1c : 0x9a9b9a;
+  pixiApp.renderer.backgroundColor = bgCol;
 
-  // Draw tiles at TSS (48px)
+  // Zone tint
+  applyZoneTint(G.mapId);
+
+  // Mark all existing tile sprites invisible, then re-show in-viewport ones
+  for (const key in tileSprites) {
+    const e = tileSprites[key];
+    if (e.ground) e.ground.visible = false;
+    if (e.object) e.object.visible = false;
+  }
+
   const vtx = Math.max(0, Math.floor(ox/TSS) - 1);
   const vty = Math.max(0, Math.floor(oy/TSS) - 1);
   const vtw = Math.ceil(W/TSS) + 3;
   const vth = Math.ceil(H/TSS) + 3;
+
   for (let ty = vty; ty < Math.min(vty+vth, h); ty++) {
     for (let tx = vtx; tx < Math.min(vtx+vtw, w); tx++) {
-      const tileId = tiles[ty][tx];
-      const img = getTile(tileId);
-      const sx = tx*TSS - ox, sy = ty*TSS - oy;
-      if (img) {
-        ctx.drawImage(img, sx, sy, TSS, TSS);
-      } else {
-        ctx.fillStyle = tileId===T.VOID      ? '#2a2b30'
-                      : tileId===T.DARK_GRASS? '#585958'
-                      : tileId===T.CAVE_FLOOR? '#3c3d3e' : '#c0c1c0';
-        ctx.fillRect(sx, sy, TSS, TSS);
-      }
+      syncTileSprite(tx, ty, tiles[ty][tx], ox, oy);
     }
   }
 
-  // Subtle grid lines
-  ctx.strokeStyle = 'rgba(0,0,0,0.06)';
-  ctx.lineWidth = 1;
-  for (let ty = vty; ty <= Math.min(vty+vth, h); ty++) {
-    ctx.beginPath(); ctx.moveTo(0, ty*TSS-oy); ctx.lineTo(W, ty*TSS-oy); ctx.stroke();
-  }
-  for (let tx = vtx; tx <= Math.min(vtx+vtw, w); tx++) {
-    ctx.beginPath(); ctx.moveTo(tx*TSS-ox, 0); ctx.lineTo(tx*TSS-ox, H); ctx.stroke();
-  }
+  // ── Drop shadows ────────────────────────────────────────────
+  shadowGfx.clear();
 
-  // NPCs — scaled with bounce
-  NPC_DEFS.filter(n => n.mapId === G.mapId).forEach(npc => {
-    const sx = npc.x*TSS - ox, sy = npc.y*TSS - oy;
-    if (sx < -100 || sy < -120 || sx > W+100 || sy > H+120) return;
-    const bob = Math.sin(Date.now()*0.003 + npc.id.charCodeAt(0)*0.7) * 3;
-    const dh = TSS * 1.5, dw = dh * 0.65;
-    const spr = G.npcSprites[npc.id];
-    if (spr) {
-      ctx.drawImage(spr, sx + TSS/2 - dw/2, sy + TSS - dh + bob, dw, dh);
+  // ── Player sprite ────────────────────────────────────────────
+  const psx = G.px*TSS - ox;
+  const psy = G.py*TSS - oy;
+  const pdh = TSS * 1.7;
+  const pdw = pdh * 0.6;
+
+  if (G.playerSprite) {
+    if (!playerPIXI) {
+      const tex = PIXI.Texture.from(G.playerSprite.canvas);
+      tex.baseTexture.scaleMode = PIXI.SCALE_MODES.NEAREST;
+      playerPIXI = new PIXI.Sprite(tex);
+      playerPIXI.anchor.set(0.5, 1);
+      spriteLayer.addChild(playerPIXI);
     } else {
-      ctx.fillStyle = '#48494b';
-      ctx.fillRect(sx + TSS/2 - 10, sy + 6, 20, 28);
+      playerPIXI.texture.update();
     }
-    // Name label
-    ctx.font = 'bold 10px monospace';
-    ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
-    const nw = ctx.measureText(npc.name).width + 12;
-    const ny = sy + TSS - dh + bob - 5;
-    ctx.fillStyle = 'rgba(26,27,28,0.82)';
-    ctx.fillRect(sx + TSS/2 - nw/2, ny - 14, nw, 14);
-    ctx.fillStyle = '#e3e5e4';
-    ctx.fillText(npc.name, sx + TSS/2, ny);
+    playerPIXI.x = psx + TSS/2;
+    playerPIXI.y = psy + TSS;
+    playerPIXI.width  = pdw;
+    playerPIXI.height = pdh;
+    playerPIXI.zIndex = G.py * 1000 + 500;
+
+    // Drop shadow ellipse
+    shadowGfx.beginFill(0x000000, 0.18);
+    shadowGfx.drawEllipse(psx + TSS/2, psy + TSS - 4, pdw*0.38, 6);
+    shadowGfx.endFill();
+  }
+
+  // ── NPC sprites ──────────────────────────────────────────────
+  const mapNpcs = NPC_DEFS.filter(n => n.mapId === G.mapId);
+  const activeNpcIds = new Set(mapNpcs.map(n => n.id));
+
+  // Remove sprites for NPCs not on this map
+  for (const id in npcSprites) {
+    if (!activeNpcIds.has(id)) {
+      spriteLayer.removeChild(npcSprites[id].spr);
+      if (npcSprites[id].label) spriteLayer.removeChild(npcSprites[id].label);
+      if (npcSprites[id].labelBg) spriteLayer.removeChild(npcSprites[id].labelBg);
+      delete npcSprites[id];
+    }
+  }
+
+  mapNpcs.forEach(npc => {
+    const sx = npc.x*TSS - ox;
+    const sy = npc.y*TSS - oy;
+    if (sx < -128 || sy < -160 || sx > W+128 || sy > H+160) return;
+
+    const bob = Math.sin(Date.now()*0.0025 + npc.id.charCodeAt(0)*0.7) * 3;
+    const dh = TSS * 1.45, dw = dh * 0.62;
+
+    const canvasSrc = G.npcSprites[npc.id];
+    if (!canvasSrc) return;
+
+    if (!npcSprites[npc.id]) {
+      const tex = PIXI.Texture.from(canvasSrc);
+      tex.baseTexture.scaleMode = PIXI.SCALE_MODES.NEAREST;
+      const spr = new PIXI.Sprite(tex);
+      spr.anchor.set(0.5, 1);
+
+      // Name label background
+      const labelBg = new PIXI.Graphics();
+      const label = new PIXI.Text(npc.name, {
+        fontFamily: 'Space Mono, monospace',
+        fontSize: 10,
+        fontWeight: 'bold',
+        fill: 0xe3e5e4,
+      });
+      label.anchor.set(0.5, 1);
+
+      spriteLayer.addChild(labelBg);
+      spriteLayer.addChild(spr);
+      spriteLayer.addChild(label);
+      npcSprites[npc.id] = { spr, label, labelBg };
+    }
+
+    const entry = npcSprites[npc.id];
+    entry.spr.x = sx + TSS/2;
+    entry.spr.y = sy + TSS + bob;
+    entry.spr.width  = dw;
+    entry.spr.height = dh;
+    entry.spr.zIndex = npc.y * 1000;
+
+    const lx = sx + TSS/2;
+    const ly = sy + TSS - dh + bob - 6;
+    const lw = entry.label.width + 14;
+    entry.label.x = lx;
+    entry.label.y = ly;
+    entry.label.zIndex = npc.y * 1000 + 1;
+
+    entry.labelBg.clear();
+    entry.labelBg.beginFill(0x1a1b1c, 0.82);
+    entry.labelBg.drawRect(lx - lw/2, ly - 14, lw, 14);
+    entry.labelBg.endFill();
+    entry.labelBg.zIndex = npc.y * 1000 - 1;
+
+    // Drop shadow for NPC
+    shadowGfx.beginFill(0x000000, 0.13);
+    shadowGfx.drawEllipse(sx + TSS/2, sy + TSS - 4, dw*0.38, 5);
+    shadowGfx.endFill();
   });
 
-  // Player — scaled
-  const psx = G.px*TSS - ox, psy = G.py*TSS - oy;
-  const pdh = TSS * 1.6, pdw = pdh * 0.65;
-  if (G.playerSprite) {
-    ctx.imageSmoothingEnabled = false;
-    const sp = G.playerSprite;
-    ctx.fillStyle = 'rgba(0,0,0,0.15)';
-    ctx.beginPath();
-    ctx.ellipse(psx + TSS/2, psy + TSS - 3, pdw*0.42, 5, 0, 0, Math.PI*2);
-    ctx.fill();
-    ctx.drawImage(sp.canvas, psx + TSS/2 - pdw/2, psy + TSS - pdh, pdw, pdh);
-  } else {
-    ctx.fillStyle = '#48494b';
-    ctx.fillRect(psx + TSS/2 - 10, psy + 4, 20, 30);
-    ctx.fillStyle = '#e3e5e4';
-    ctx.fillRect(psx + TSS/2 - 6, psy + 10, 5, 5);
-    ctx.fillRect(psx + TSS/2 + 1, psy + 10, 5, 5);
-  }
+  // Y-sort the sprite layer
+  spriteLayer.sortableChildren = true;
+  spriteLayer.sortChildren();
 
-  // Vignette
-  const vc = G.mapId==='cave'      ? 'rgba(0,0,0,0.45)'
-           : G.mapId==='void_lands' ? 'rgba(0,0,0,0.55)'
-           : G.mapId==='citadel'    ? 'rgba(0,0,0,0.6)'
-           :                          'rgba(0,0,0,0.08)';
-  const vg = ctx.createRadialGradient(W/2, H/2, H*0.28, W/2, H/2, H*0.85);
-  vg.addColorStop(0, 'rgba(0,0,0,0)');
-  vg.addColorStop(1, vc);
-  ctx.fillStyle = vg;
-  ctx.fillRect(0, 0, W, H);
+  // ── Dynamic lighting via radial gradient canvas texture ─────
+  drawLighting();
 
-  // Fade
-  if (G.fadeAlpha > 0) {
-    ctx.fillStyle = `rgba(0,0,0,${G.fadeAlpha})`;
-    ctx.fillRect(0, 0, W, H);
-  }
+  // ── Fade overlay ─────────────────────────────────────────────
+  fadeRect.alpha = G.fadeAlpha;
 
+  // ── Notifications ─────────────────────────────────────────────
   drawNotifications();
   drawQuestTracker();
+
+  // Tick the PixiJS renderer manually
+  pixiApp.renderer.render(pixiApp.stage);
 }
 
 function drawNotifications() {
-  let y=60;
-  if(G.questNotif){
-    G.questNotif.timer--;
-    if(G.questNotif.timer>0){
-      drawNotif(G.questNotif.text, y, G.questNotif.timer);
-    } else G.questNotif=null;
-    y+=28;
-  }
-  if(G.itemNotif){
-    G.itemNotif.timer--;
-    if(G.itemNotif.timer>0){
-      drawNotif(G.itemNotif.text, y, G.itemNotif.timer);
-    } else G.itemNotif=null;
-  }
-}
+  let activeNotif = null;
+  let y = 60;
 
-function drawNotif(text, y, timer) {
-  const alpha=Math.min(1, timer/30);
-  const tw=ctx.measureText(text).width+24;
-  ctx.font='bold 11px monospace';
-  const nx=W/2-tw/2;
-  ctx.fillStyle=`rgba(72,73,75,${alpha*0.9})`;
-  ctx.fillRect(nx,y,tw,20);
-  ctx.fillStyle=`rgba(227,229,228,${alpha})`;
-  ctx.textAlign='center'; ctx.textBaseline='middle';
-  ctx.fillText(text, W/2, y+10);
+  if (G.questNotif) {
+    G.questNotif.timer--;
+    if (G.questNotif.timer > 0) activeNotif = { text: G.questNotif.text, timer: G.questNotif.timer, y };
+    else G.questNotif = null;
+    y += 30;
+  }
+  if (!activeNotif && G.itemNotif) {
+    G.itemNotif.timer--;
+    if (G.itemNotif.timer > 0) activeNotif = { text: G.itemNotif.text, timer: G.itemNotif.timer, y };
+    else G.itemNotif = null;
+  }
+
+  if (activeNotif) {
+    const alpha = Math.min(1, activeNotif.timer / 30);
+    notifText.text = activeNotif.text;
+    notifText.alpha = alpha;
+    notifText.x = W/2;
+    notifText.y = activeNotif.y + 10;
+    const nw = notifText.width + 24;
+    notifBg.clear();
+    notifBg.beginFill(0x48494b, 0.9 * alpha);
+    notifBg.drawRect(W/2 - nw/2, activeNotif.y, nw, 20);
+    notifBg.endFill();
+    notifText.visible = true;
+    notifBg.visible = true;
+  } else {
+    notifText.visible = false;
+    notifBg.visible = false;
+  }
 }
 
 function drawQuestTracker() {
-  if(!G.save.activeQuests.length) return;
-  const qid=G.save.activeQuests[0];
-  const qs=G.save.quests[qid]; const qdef=QUESTS[qid];
-  if(!qs||!qdef) return;
-  const nextStep=qs.steps.find(s=>!s.done);
-  if(!nextStep) return;
+  if (!G.save.activeQuests.length) { questText.visible = false; return; }
+  const qid = G.save.activeQuests[0];
+  const qs = G.save.quests[qid]; const qdef = QUESTS[qid];
+  if (!qs || !qdef) { questText.visible = false; return; }
+  const nextStep = qs.steps.find(s => !s.done);
+  if (!nextStep) { questText.visible = false; return; }
 
-  ctx.font='9px monospace';
-  ctx.textAlign='right'; ctx.textBaseline='top';
-  const label=`◉ ${nextStep.text}`;
-  const tw=ctx.measureText(label).width+12;
-  ctx.fillStyle='rgba(72,73,75,0.75)';
-  ctx.fillRect(W-tw-6,6,tw+6,18);
-  ctx.fillStyle='#e3e5e4';
-  ctx.fillText(label, W-8, 11);
+  questText.text = `◉ ${nextStep.text}`;
+  questText.x = W - 8;
+  questText.y = 8;
+  questText.visible = true;
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1658,13 +2023,18 @@ function startGame() {
   G.save.journal=['Chapter 1: The First Render — Your story begins.'];
   G.party.forEach(n=>{n.hp=n.maxHp;n.mp=n.maxMp;n.alive=true;});
 
+  // Reset PixiJS player sprite so it's rebuilt with new party lead
+  if (playerPIXI) { spriteLayer.removeChild(playerPIXI); playerPIXI = null; }
+
   // Build player sprite from lead Normie
   const lead=G.party[0];
   G.playerSprite=buildPlayerSprite(lead?.pixels, lead?.px);
 
   loadMap('home');
-  G.camX = G.px * TSS;
-  G.camY = G.py * TSS;
+  // Snap camera to spawn (no lerp lag on start)
+  const mapPxW = G.mapData.w * TSS, mapPxH = G.mapData.h * TSS;
+  G.camX = Math.max(0, Math.min(G.px*TSS + TSS/2 - W/2, mapPxW - W));
+  G.camY = Math.max(0, Math.min(G.py*TSS + TSS/2 - H/2, mapPxH - H));
 
   showScreen('game');
   renderHUD();

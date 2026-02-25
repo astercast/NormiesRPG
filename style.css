@@ -154,7 +154,7 @@ button{
 /* ── GAME WORLD */
 #screen-game{background:#48494b;overflow:hidden}
 #screen-game.active{display:block}
-#world-canvas{display:block;position:absolute;top:0;left:0;image-rendering:pixelated;image-rendering:crisp-edges}
+#world-canvas,#screen-game canvas{display:block;position:absolute;top:0;left:0;image-rendering:pixelated;image-rendering:crisp-edges}
 
 #zone-bar{
   position:absolute;top:8px;left:50%;transform:translateX(-50%);
