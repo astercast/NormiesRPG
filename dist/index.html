@@ -7,8 +7,8 @@
   <link rel="icon" href="https://www.normies.art/favicon.ico"/>
   <link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet"/>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js"></script>
-  <script type="module" crossorigin src="./assets/index-DpzkIfPQ.js"></script>
-  <link rel="stylesheet" crossorigin href="./assets/index-BCGZHknc.css">
+  <script type="module" crossorigin src="./assets/index-D352zHMe.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-G7bRA2yX.css">
 </head>
 <body>
 
@@ -23,7 +23,7 @@
       or use Demo Mode to begin with random ones.
     </p>
     <div id="wallet-addr" class="wallet-addr"></div>
-    <div id="wallet-help" class="wallet-help" style="display:none">
+    <div id="wallet-help" class="wallet-help hidden">
       No Web3 wallet detected.<br>
       Install <a href="https://metamask.io" target="_blank">MetaMask</a>, 
       <a href="https://www.coinbase.com/wallet" target="_blank">Coinbase Wallet</a>,
@@ -53,44 +53,49 @@
 
 <!-- ══ PARTY SELECT ══ -->
 <div id="screen-party" class="screen">
-  <div class="party-wrap">
-    <div class="party-header">
-      <button class="btn-back" id="btn-back-title">← Back</button>
-      <div class="party-header-mid">
-        <div class="label">Choose Your Party</div>
-        <div class="party-title">THE PIXEL WAR</div>
+  <div class="party-layout">
+    <!-- Left column: party slots + action -->
+    <aside class="party-sidebar">
+      <div class="party-sidebar-top">
+        <button class="btn-back" id="btn-back-title">← Back</button>
+        <div class="party-brand">
+          <div class="label">The Pixel War</div>
+          <div class="party-title">Choose Your Party</div>
+        </div>
       </div>
-      <div class="party-header-right">
-        <span class="label" id="party-count">0 / 5</span>
-        <button id="btn-start" class="btn-primary" disabled>Enter World →</button>
+
+      <div class="party-slots-section">
+        <div class="party-slots-label"><span class="label">Your Squad</span> <span id="party-count" class="label">0 / 5</span></div>
+        <div id="party-slots" class="party-slots"></div>
+        <p class="slot-hint">Tap a Normie to add · Tap slot to remove</p>
       </div>
-    </div>
 
-    <div class="party-row">
-      <div class="party-slots" id="party-slots"></div>
-      <p class="slot-hint">Select up to 5 · Click slot to remove · Lead Normie walks the world</p>
-    </div>
+      <div class="party-action-area">
+        <button id="btn-start" class="btn-primary btn-enter-world" disabled>Enter World →</button>
+        <p class="slot-hint" style="margin-top:8px">Lead Normie walks the overworld</p>
+      </div>
+    </aside>
 
-    <div class="hr-line"></div>
-
-    <div class="grid-header">
-      <span class="label">Your Collection <span id="col-count"></span></span>
-    </div>
-    <div id="normie-grid" class="normie-grid">
-      <div class="grid-loading">Loading your Normies…</div>
-    </div>
+    <!-- Right column: collection grid -->
+    <main class="party-main">
+      <div class="grid-header">
+        <span class="label">Collection <span id="col-count"></span></span>
+      </div>
+      <div id="normie-grid" class="normie-grid">
+        <div class="grid-loading">Loading your Normies…</div>
+      </div>
+    </main>
   </div>
 </div>
 
 <!-- ══ GAME ══ -->
-<div id="screen-game" class="screen" style="display:none">
+<div id="screen-game" class="screen">
   <canvas id="world-canvas"></canvas>
 
-  <!-- Zone / step bar -->
+  <!-- Zone bar -->
   <div id="zone-bar">
     <span id="zone-name">YOUR HOME</span>
-    <span id="step-count">0 steps</span>
-    <span class="zone-hint">WASD/↑↓←→ move · E interact · I menu</span>
+    <span class="zone-hint">WASD/↑↓←→ · E interact · I menu</span>
   </div>
 
   <!-- HUD -->
@@ -181,6 +186,7 @@
             <button id="btn-skill" class="bat-btn ghost">Skill<small id="lbl-skill"></small></button>
             <button id="btn-ult"   class="bat-btn ghost">Ultimate<small id="lbl-ult"></small></button>
             <button id="btn-bpot"  class="bat-btn ghost">Potion<small id="lbl-bpot"></small></button>
+            <button id="btn-flee"  class="bat-btn flee">Flee</button>
           </div>
         </div>
       </div>
@@ -208,6 +214,18 @@
         <div id="menu-party"  class="menu-tab-content" style="display:none"></div>
         <div id="menu-journal" class="menu-tab-content" style="display:none"></div>
       </div>
+    </div>
+  </div>
+
+  <!-- Skill Tree Modal -->
+  <div id="skill-tree-modal" class="overlay hidden">
+    <div class="st-wrap">
+      <div class="st-header">
+        <div id="st-normie-info" class="st-normie-info"></div>
+        <div id="st-points" class="st-points">0 SP</div>
+        <button id="btn-close-st" class="btn-close">✕</button>
+      </div>
+      <div id="st-branches" class="st-branches"></div>
     </div>
   </div>
 
@@ -246,5 +264,6 @@
   </div>
 </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pixi.js/7.4.2/pixi.min.js"></script>
 </body>
 </html>

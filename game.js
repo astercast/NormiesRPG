@@ -1,11 +1,11 @@
 // game.js — THE PIXEL WAR v5
 // Multi-map • Walking animation • Quest system • Story-driven NPCs • Animated battles
 
-import { fetchNormieMeta, fetchNormiePixels, makeDemoNormie, calcStats } from './normie-api.js';
+import { fetchNormieMeta, fetchNormiePixels, makeDemoNormie, calcStats, grantXP } from './normie-api.js';
 import { connectWallet, loadWalletNormies, loadDemoNormies, detectWallets } from './wallet.js';
 import { T, getTile, tickTiles, TILE_SIZE, tilesReady } from './tiles.js';
 import { MAP_BUILDERS, isTileBlocked, MAP_SPAWN } from './mapgen.js';
-import { QUESTS, ITEMS, NPC_DEFS, ENEMIES, MAPS, LORE } from './story.js';
+import { QUESTS, ITEMS, NPC_DEFS, ENEMIES, MAPS, LORE, SKILL_TREES } from './story.js';
 import { buildNpcSprite, buildEnemySprite, buildPlayerSprite, buildPartyBattleSprite } from './sprites.js';
 
 const TS  = TILE_SIZE;   // 16px native
@@ -126,6 +126,8 @@ let   fadeRect     = null;  // PIXI.Graphics for map fade
 // Zone colour-matrix tints
 const ZONE_TINTS = {
   home:       [1.05, 1.0,  0.9,  0],   // warm indoor
+  home_up:    [1.05, 1.0,  0.9,  0],   // warm indoor - bedroom
+  home_down:  [1.04, 1.0,  0.88, 0],   // warm indoor - living room
   overworld:  [1.0,  1.02, 0.95, 0],   // subtle warm green
   town:       [1.02, 1.0,  1.0,  0],   // neutral
   cave:       [0.7,  0.8,  1.1,  0],   // cold blue-grey
@@ -265,8 +267,11 @@ function initInput() {
   });
   window.addEventListener('keyup', e => { G.keys[e.code] = false; });
 
-  // Touch/click for mobile
-  canvas.addEventListener('click', () => {
+  // Touch/click for mobile — attach to document body to handle before PIXI canvas exists
+  document.addEventListener('click', (e) => {
+    // Only propagate to game if we're in the game screen and not on UI elements
+    if (G.screen !== 'game') return;
+    if (e.target.closest('#dialogue, #battle, #menu-overlay, #shop, #hud, #zone-bar')) return;
     G.interactPressed = true;
   });
 }
@@ -306,11 +311,12 @@ function loadMap(mapId, spawnX, spawnY) {
     }
   });
 
-  // Quest: entering cave
-  if (mapId === 'cave') completeQuestStep('ch2_cave', 'enter_cave');
-  if (mapId === 'citadel') completeQuestStep('ch3_void_march', 'reach_citadel');
-  if (mapId === 'town') completeQuestStep('ch1_find_oracle', 'reach_town');
-  if (mapId === 'void_lands') completeQuestStep('ch3_void_march', 'cross_void');
+  // Quest: entering zones
+  if (mapId === 'cave')       completeQuestStep('ch2_cave',      'enter_cave');
+  if (mapId === 'citadel')    completeQuestStep('ch3_void_march','reach_citadel');
+  if (mapId === 'town')       completeQuestStep('ch1_find_oracle','reach_town');
+  if (mapId === 'void_lands') completeQuestStep('ch3_void_march','cross_void');
+  if (mapId === 'home_down')  completeQuestStep('prologue_home', 'go_downstairs');
 }
 
 function fadeToMap(mapId, spawnX, spawnY) {
@@ -395,11 +401,14 @@ function startQuest(questId) {
 
 function startFollowupQuests(completedId) {
   const followups = {
-    prologue: ['ch1_find_oracle'],
-    ch1_find_oracle: [],
-    ch1_bit_shards: ['ch2_cave'],
-    ch2_cave: ['ch3_void_march'],
-    ch3_void_march: ['finale'],
+    prologue_home:    ['prologue_outside'],
+    prologue_outside: ['ch1_soldier'],
+    ch1_soldier:      ['ch1_find_oracle'],
+    ch1_find_oracle:  ['ch1_bit_shards'],
+    ch1_bit_shards:   ['ch2_cave'],
+    ch2_cave:         ['ch3_void_march'],
+    ch3_void_march:   ['ch3_upgrade'],
+    ch3_upgrade:      ['finale'],
   };
   (followups[completedId] || []).forEach(startQuest);
 }
@@ -469,10 +478,31 @@ function handleMovement(dt) {
     }
   }
 
-  // Home exits
+  // Home floor transitions and exits
+  if (G.mapId === 'home_up') {
+    if (tile === T.STAIRS_DN) {
+      fadeToMap('home_down', MAP_SPAWN['home_down'].x, MAP_SPAWN['home_down'].y);
+      G.moveCooldown = 400;
+      return;
+    }
+  }
+  if (G.mapId === 'home_down') {
+    if (tile === T.DOOR) {
+      completeQuestStep('prologue_outside', 'leave_home');
+      fadeToMap('overworld', 16, 23);
+      G.moveCooldown = 400;
+      return;
+    }
+    if (tile === T.STAIRS_DN) {
+      // stairs_dn in home_down goes back up
+      fadeToMap('home_up', MAP_SPAWN['home_up'].x, MAP_SPAWN['home_up'].y);
+      G.moveCooldown = 400;
+      return;
+    }
+  }
+  // Legacy 'home' fallback
   if (G.mapId === 'home') {
     if (tile === T.DOOR) {
-      completeQuestStep('prologue', 'leave_home');
       fadeToMap('overworld', 16, 23);
       G.moveCooldown = 400;
       return;
@@ -704,10 +734,12 @@ function getZoneTier() {
 }
 
 const TIER_ENEMIES = [
-  ['void_scout','glitch_sprite'],
-  ['void_soldier','bit_wraith'],
-  ['pixel_golem'],
-  ['void_commander'],
+  ['void_scout','glitch_sprite'],        // tier 0: overworld
+  ['void_soldier','bit_wraith'],         // tier 1: dark grass
+  ['cave_crawler','cave_guardian'],      // tier 2: cave
+  ['void_hulk','null_specter'],          // tier 3: void lands
+  ['void_elite','void_commander'],       // tier 4: citadel
+  ['nullbyte'],                          // tier 5: final
 ];
 
 function startEncounter(forcedEnemyId) {
@@ -1035,6 +1067,23 @@ function endBattle(result) {
     bLog(`${enemy.name} defeated! +${gold}G`,'log-big');
     addJournal(`Defeated ${enemy.name} — +${gold}G`);
 
+    // XP grants
+    const xpEarned = enemy.xpReward || (15 + enemy.tier * 20);
+    const lvUpMsgs = [];
+    G.party.filter(n=>n.alive).forEach(n => {
+      const msgs = grantXP(n, xpEarned);
+      if (msgs.length) {
+        lvUpMsgs.push(...msgs.map(m => `${n.name}: ${m}`));
+        // Rebuild player sprite if lead leveled up
+        if (n === G.party[0]) {
+          G.playerSprite = buildPlayerSprite(n.pixels);
+          if (playerPIXI) { spriteLayer.removeChild(playerPIXI); playerPIXI = null; }
+        }
+      }
+    });
+    if (xpEarned > 0) bLog(`+${xpEarned} XP`, 'log-em');
+    lvUpMsgs.forEach(m => { bLog(m, 'log-big'); showQuestNotif(m); });
+
     // Item drops
     if(enemy.dropItem && Math.random()<(enemy.dropChance||0.3)){
       addItem(enemy.dropItem, 1);
@@ -1186,16 +1235,123 @@ function renderPartyStatus() {
       c2x.drawImage(bsprite,0,0,40,40);
       imgHtml=c2.outerHTML;
     }
+    const xp = n.xp||0;
+    const lv = n.lv||1;
+    const xpNext = n.xpToNext || 100;
+    const xpPct = Math.min(100, Math.round(xp/xpNext*100));
+    const sp = n.skillPoints||0;
     card.innerHTML=`${imgHtml}
       <div class="pc-info">
         <div class="pc-name">${n.name} <span class="pc-type">${n.type}</span></div>
-        <div class="pc-level">Lv${n.lv} · ${n.px}px · ${n.expression}</div>
+        <div class="pc-level">Lv${lv} · ${n.px}px · ${n.expression}</div>
+        <div class="pc-level-bar">XP ${xp}/${xpNext}</div>
+        <div class="pc-xp-bar"><div class="pc-xp-fill" style="width:${xpPct}%"></div></div>
+        ${sp>0?`<div class="pc-sp">★ ${sp} Skill Point${sp>1?'s':''} available</div>`:''}
         <div class="pc-acc">${n.accessory!=='No Accessories'?n.accessory:'No Accessory'}</div>
         <div class="pc-stats">HP ${n.hp}/${n.maxHp} · MP ${n.mp}/${n.maxMp} · DEF ${n.def} · SPD ${n.spd} · CRIT ${Math.round(n.crit*100)}%</div>
         <div class="pc-moves">${n.sk1} (${n.atkSkill}dmg) · ${n.sk2} (${n.atkUltimate}dmg)</div>
+        <div style="margin-top:6px"><button class="btn-use" data-id="${n.id}">Skill Tree →</button></div>
       </div>`;
     el.appendChild(card);
   });
+  // Skill tree click handlers
+  el.querySelectorAll('[data-id]').forEach(btn=>{
+    btn.onclick=(e)=>{
+      e.stopPropagation();
+      const n=G.party.find(p=>p.id===btn.dataset.id);
+      if(n) openSkillTree(n);
+    };
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+// SKILL TREE
+// ═══════════════════════════════════════════════════════════
+function openSkillTree(normie) {
+  const modal = document.getElementById('skill-tree-modal');
+  if (!modal) return;
+  modal.classList.remove('hidden');
+
+  const info = document.getElementById('st-normie-info');
+  const lv = normie.lv||1;
+  info.innerHTML = `<strong>#${normie.id}</strong> &nbsp;${normie.type} &nbsp;Lv${lv} &nbsp;HP ${normie.hp}/${normie.maxHp} &nbsp;ATK ${normie.atkBasic}`;
+
+  const spEl = document.getElementById('st-points');
+  function refreshSP() {
+    spEl.textContent = `${normie.skillPoints||0} SP`;
+  }
+  refreshSP();
+
+  const branches = document.getElementById('st-branches');
+  branches.innerHTML = '';
+
+  const trees = window.__SKILL_TREES || {};
+  const typeKey = normie.type||'Human';
+  const typeTree = trees[typeKey] || trees['Human'] || {};
+  if (!typeTree.branches) return;
+
+  (typeTree.branches||[]).forEach((branch) => {
+    const col = document.createElement('div');
+    col.className = 'st-branch';
+    col.innerHTML = `<div class="st-branch-name">${branch.icon||''} ${branch.name}</div>
+      <div class="st-branch-desc">${branch.desc||''}</div>`;
+
+    (branch.skills||[]).forEach((skill, tier) => {
+      const unlocked = !!(normie.unlockedSkills||{})[skill.id];
+      const cost = skill.cost||1;
+      const canAfford = (normie.skillPoints||0) >= cost;
+      const prereqMet = tier === 0 || !!(normie.unlockedSkills||{})[(branch.skills[tier-1]||{}).id];
+
+      const card = document.createElement('div');
+      card.className = 'st-skill' + (unlocked?' unlocked':' locked');
+
+      const btnHtml = unlocked
+        ? `<button class="btn-unlock done" disabled>✓ Learned</button>`
+        : `<button class="btn-unlock${(!canAfford||!prereqMet)?' disabled':''}"
+             ${(!canAfford||!prereqMet)?'disabled':''}
+             data-bid="${branch.id}" data-tier="${tier}">
+             ${!prereqMet?'🔒 Locked':canAfford?'Unlock':'Need SP'}
+           </button>`;
+
+      card.innerHTML = `
+        <div class="st-skill-name">${tier===0?'◆':tier===1?'◈':'★'} ${skill.name}</div>
+        <div class="st-skill-desc">${skill.desc}</div>
+        <div class="st-skill-cost">${unlocked?'Unlocked':`${cost} SP`}</div>
+        ${btnHtml}`;
+
+      if (!unlocked) {
+        const btn = card.querySelector('button:not([disabled])');
+        if (btn) {
+          btn.onclick = () => {
+            normie.skillPoints = (normie.skillPoints||0) - cost;
+            if (!normie.unlockedSkills) normie.unlockedSkills = {};
+            normie.unlockedSkills[skill.id] = true;
+            applySkillEffect(normie, skill);
+            if (normie === G.party[0]) renderHUD();
+            showItemNotif(`Unlocked: ${skill.name}!`);
+            openSkillTree(normie);
+          };
+        }
+      }
+      col.appendChild(card);
+    });
+    branches.appendChild(col);
+  });
+
+  document.getElementById('btn-close-st').onclick = () => modal.classList.add('hidden');
+}
+
+function applySkillEffect(normie, skill) {
+  if (!skill || !skill.effect) return;
+  const e = skill.effect;
+  if (e.atkMult)    normie.atkBasic   = Math.round((normie.atkBasic||10)   * (1 + e.atkMult));
+  if (e.skillMult)  normie.atkSkill   = Math.round((normie.atkSkill||12)   * (1 + e.skillMult));
+  if (e.ultMult)    normie.atkUltimate= Math.round((normie.atkUltimate||16)* (1 + e.ultMult));
+  if (e.hpMult)   { const hp = Math.round((normie.maxHp||50) * e.hpMult); normie.maxHp += hp; normie.hp = Math.min(normie.maxHp, normie.hp + hp); }
+  if (e.defBonus)   normie.def        = (normie.def||0) + e.defBonus;
+  if (e.spdBonus)   normie.spd        = (normie.spd||0) + e.spdBonus;
+  if (e.critChance) normie.crit       = Math.min(0.95, (normie.crit||0.05) + e.critChance);
+  if (e.mpDiscount) normie._mpDiscount = (normie._mpDiscount||0) + e.mpDiscount;
 }
 
 function renderQuests() {
@@ -1866,10 +2022,13 @@ function showScreen(id) {
 // ═══════════════════════════════════════════════════════════
 window.addEventListener('DOMContentLoaded', async () => {
   drawTitleLogo();
-  initCanvas();
+  // NOTE: initCanvas() is NOT called here — PIXI CDN loads async after this runs.
+  // Canvas is lazy-initialized the first time we call startGame() instead.
   initInput();
   initQuestSave();
-  startQuest('prologue');
+  startQuest('prologue_home');
+  // Expose skill trees globally for the skill tree modal
+  window.__SKILL_TREES = SKILL_TREES;
 
   // Detect wallets on load and update button label
   function refreshWalletBtn() {
@@ -2008,6 +2167,14 @@ window.addEventListener('DOMContentLoaded', async () => {
   };
 
   document.getElementById('btn-ending-play-again').onclick=()=>location.reload();
+
+  // Skill tree modal outside-click close
+  const stModal = document.getElementById('skill-tree-modal');
+  if (stModal) {
+    stModal.addEventListener('click', (e) => {
+      if (e.target === stModal) stModal.classList.add('hidden');
+    });
+  }
 });
 
 function buildBattleSprite(n) {
@@ -2017,20 +2184,35 @@ function buildBattleSprite(n) {
 }
 
 function startGame() {
+  // Lazy-init PIXI now that the CDN script is definitely loaded
+  if (!pixiApp) {
+    initCanvas();
+  }
+
   // Init world state
   G.save.gold=0; G.save.battlesWon=0;
   G.save.inventory={potion:3};
   G.save.journal=['Chapter 1: The First Render — Your story begins.'];
   G.party.forEach(n=>{n.hp=n.maxHp;n.mp=n.maxMp;n.alive=true;});
 
+  // Reset quest state for new game
+  initQuestSave();
+  G.save.activeQuests = [];
+  G.save.completedQuests = [];
+  G.save.talkedTo = {};
+  G.save.visitedMaps = {};
+  G.save.flags = {};
+  G.save.steps = 0;
+  startQuest('prologue_home');
+
   // Reset PixiJS player sprite so it's rebuilt with new party lead
   if (playerPIXI) { spriteLayer.removeChild(playerPIXI); playerPIXI = null; }
 
   // Build player sprite from lead Normie
   const lead=G.party[0];
-  G.playerSprite=buildPlayerSprite(lead?.pixels, lead?.px);
+  G.playerSprite=buildPlayerSprite(lead?.pixels);
 
-  loadMap('home');
+  loadMap('home_up');
   // Snap camera to spawn (no lerp lag on start)
   const mapPxW = G.mapData.w * TSS, mapPxH = G.mapData.h * TSS;
   G.camX = Math.max(0, Math.min(G.px*TSS + TSS/2 - W/2, mapPxW - W));
@@ -2039,10 +2221,10 @@ function startGame() {
   showScreen('game');
   renderHUD();
 
-  // Opening dialogue from Mom
+  // Opening dialogue from Mom (upstairs)
   setTimeout(()=>{
-    const mom=NPC_DEFS.find(n=>n.id==='mom');
-    if(mom) openDialogue(mom.name, mom.lines, G.npcSprites['mom']);
+    const mom=NPC_DEFS.find(n=>n.id==='mom_up');
+    if(mom) openDialogue(mom.name, mom.lines.slice(0,2), G.npcSprites['mom_up']);
   }, 800);
 
   if(raf) cancelAnimationFrame(raf);
