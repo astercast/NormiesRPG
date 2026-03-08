@@ -280,6 +280,14 @@ function setLaunchStatus(message) {
   if (ui.launchStatus) ui.launchStatus.textContent = message;
 }
 
+function walletErrorMessage(err) {
+  const code = err?.message || 'UNKNOWN_ERROR';
+  if (code === 'NO_WALLET') return 'No browser wallet detected. Install MetaMask/Coinbase/Rabby or use Demo Mode.';
+  if (code === 'USER_REJECTED') return 'Wallet request was rejected. Approve the connection prompt to continue.';
+  if (code === 'WALLET_PROVIDER_UNAVAILABLE') return 'Selected wallet provider is unavailable. Refresh wallet list and try again.';
+  return `Wallet connect failed: ${code}`;
+}
+
 function renderWalletChoices() {
   if (!ui.walletPicker) return;
 
@@ -1329,8 +1337,9 @@ async function hydrateWalletParty(providerId = null) {
     // Auto attempt load from wallet slot so progression follows wallet identity.
     await loadCloud();
   } catch (err) {
-    updateWalletStatus(`Wallet connect failed: ${err.message}`);
-    setLaunchStatus(`Wallet connect failed: ${err.message}`);
+    const message = walletErrorMessage(err);
+    updateWalletStatus(message);
+    setLaunchStatus(message);
   }
 }
 

@@ -10,49 +10,71 @@ const ABI = [
 // Detect all available wallet providers
 export function detectWallets() {
   const wallets = [];
+  const seenProviders = new Set();
 
-  // EIP-1193 injected providers
-  if (window.ethereum) {
-    if (window.ethereum.isMetaMask) wallets.push({ id: 'metamask', name: 'MetaMask', provider: window.ethereum });
-    else if (window.ethereum.isCoinbaseWallet) wallets.push({ id: 'coinbase', name: 'Coinbase Wallet', provider: window.ethereum });
-    else if (window.ethereum.isRabby) wallets.push({ id: 'rabby', name: 'Rabby', provider: window.ethereum });
-    else if (window.ethereum.isBraveWallet) wallets.push({ id: 'brave', name: 'Brave Wallet', provider: window.ethereum });
-    else wallets.push({ id: 'injected', name: 'Browser Wallet', provider: window.ethereum });
-  }
+  const addProvider = (provider) => {
+    if (!provider || seenProviders.has(provider)) return;
+    seenProviders.add(provider);
 
-  // EIP-6963 multi-injected providers
-  if (window.ethereum?.providers) {
-    window.ethereum.providers.forEach(p => {
-      if (p.isMetaMask && !wallets.find(w=>w.id==='metamask'))
-        wallets.push({ id: 'metamask', name: 'MetaMask', provider: p });
-      if (p.isCoinbaseWallet && !wallets.find(w=>w.id==='coinbase'))
-        wallets.push({ id: 'coinbase', name: 'Coinbase Wallet', provider: p });
-    });
+    let id = 'injected';
+    let name = 'Browser Wallet';
+
+    if (provider.isCoinbaseWallet) {
+      id = 'coinbase';
+      name = 'Coinbase Wallet';
+    } else if (provider.isMetaMask) {
+      id = 'metamask';
+      name = 'MetaMask';
+    } else if (provider.isRabby) {
+      id = 'rabby';
+      name = 'Rabby';
+    } else if (provider.isBraveWallet) {
+      id = 'brave';
+      name = 'Brave Wallet';
+    }
+
+    if (!wallets.find((w) => w.id === id)) {
+      wallets.push({ id, name, provider });
+    }
+  };
+
+  // EIP-1193 default injected provider
+  if (window.ethereum) addProvider(window.ethereum);
+
+  // Multi-injected providers (MetaMask + Coinbase side-by-side, etc.)
+  if (Array.isArray(window.ethereum?.providers)) {
+    window.ethereum.providers.forEach((p) => addProvider(p));
   }
 
   return wallets;
 }
 
 export async function connectWallet(providerId = null) {
-  // Try WalletConnect if no injected wallet and WC is loaded
   const wallets = detectWallets();
 
-  let rawProvider;
-
   if (wallets.length === 0) {
-    // No injected wallet — try to open wallet app or show install prompt
     throw new Error('NO_WALLET');
   }
 
-  // Use specified or first available
-  const chosen = providerId ? wallets.find(w=>w.id===providerId) : wallets[0];
-  rawProvider = (chosen || wallets[0]).provider;
+  const chosen = providerId ? wallets.find((w) => w.id === providerId) : wallets[0];
+  const selected = chosen || wallets[0];
+  const rawProvider = selected.provider;
 
-  await rawProvider.request({ method: 'eth_requestAccounts' });
+  if (!rawProvider || typeof rawProvider.request !== 'function') {
+    throw new Error('WALLET_PROVIDER_UNAVAILABLE');
+  }
+
+  try {
+    await rawProvider.request({ method: 'eth_requestAccounts' });
+  } catch (err) {
+    if (err?.code === 4001) throw new Error('USER_REJECTED');
+    throw err;
+  }
+
   const provider = new ethers.BrowserProvider(rawProvider);
   const signer = await provider.getSigner();
   const address = await signer.getAddress();
-  return { provider, address, walletName: (chosen||wallets[0]).name };
+  return { provider, address, walletName: selected.name };
 }
 
 export async function loadWalletNormies(address, provider, onProgress) {
