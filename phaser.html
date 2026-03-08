@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Normies RPG - Phaser Alpha</title>
+  <link rel="stylesheet" href="./phaser-style.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js"></script>
+</head>
+<body>
+  <div class="wallet-bar">
+    <button id="btn-wallet-connect" class="btn">Connect Wallet</button>
+    <button id="btn-wallet-demo" class="btn alt">Demo Party</button>
+    <span id="wallet-status" class="wallet-status">Wallet: not connected</span>
+  </div>
+
+  <div class="hud">
+    <div class="brand">Normies RPG - Phaser</div>
+    <div class="stats">
+      <span id="zone-label">Zone: Neon Plains</span>
+      <span id="lead-label">Lead: Rookie</span>
+      <span id="gold-label">Gold: 0</span>
+      <span id="hp-label">HP: 100/100</span>
+      <span id="potions-label">Potions: 0</span>
+      <span id="eq-label">Gear: --</span>
+      <span id="fps-label">FPS: --</span>
+    </div>
+  </div>
+
+  <div id="game-root"></div>
+
+  <div id="quest-banner" class="quest-banner">Quest: Talk to Elder Vex in town.</div>
+
+  <div id="dialogue" class="dialogue hidden">
+    <div id="dialogue-name" class="dialogue-name">NPC</div>
+    <div id="dialogue-text" class="dialogue-text">...</div>
+    <div class="dialogue-actions">
+      <button id="dialogue-close" class="btn">Close</button>
+    </div>
+  </div>
+
+  <div id="battle" class="battle hidden">
+    <div class="battle-card">
+      <div class="battle-head">
+        <div id="battle-enemy-name" class="battle-enemy-name">Enemy</div>
+        <div id="battle-round" class="battle-round">Round 1</div>
+      </div>
+
+      <div class="battle-bars">
+        <div class="battle-row">
+          <span>Hero HP</span>
+          <div class="bar"><div id="battle-hero-hp" class="fill hero"></div></div>
+        </div>
+        <div class="battle-row">
+          <span>Enemy HP</span>
+          <div class="bar"><div id="battle-enemy-hp" class="fill enemy"></div></div>
+        </div>
+      </div>
+
+      <div id="battle-log" class="battle-log"></div>
+
+      <div class="battle-actions">
+        <button id="btn-attack" class="btn">Attack</button>
+        <button id="btn-skill" class="btn alt">Photon Slash</button>
+        <button id="btn-potion" class="btn alt">Potion</button>
+        <button id="btn-flee" class="btn alt">Flee</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="menu" class="panel hidden">
+    <div class="panel-card">
+      <div class="panel-head">
+        <strong>Inventory + Equipment</strong>
+        <button id="menu-close" class="btn alt">Close</button>
+      </div>
+      <div id="menu-body" class="panel-body"></div>
+      <div id="party-body" class="panel-body"></div>
+      <div class="panel-actions">
+        <button id="btn-save-cloud" class="btn">Save Cloud</button>
+        <button id="btn-load-cloud" class="btn alt">Load Cloud</button>
+      </div>
+      <div id="save-status" class="panel-status">Cloud save: idle</div>
+    </div>
+  </div>
+
+  <div id="shop" class="panel hidden">
+    <div class="panel-card">
+      <div class="panel-head">
+        <strong>Merchant Shop</strong>
+        <button id="shop-close" class="btn alt">Close</button>
+      </div>
+      <div id="shop-body" class="panel-body"></div>
+      <div class="panel-status">Buy gear and potions. Better loot drops in harder zones.</div>
+    </div>
+  </div>
+
+  <div class="help">
+    <strong>Controls:</strong> WASD or arrows move, Shift sprint, E interact, I inventory.
+    <a href="./index.html">Back to current game</a>
+  </div>
+
+  <script type="module" src="./phaser-main.js"></script>
+</body>
+</html>
