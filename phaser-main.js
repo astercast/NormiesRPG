@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { connectWallet, loadWalletNormies, loadDemoNormies } from './wallet.js';
+import { connectWallet, loadWalletNormies, loadDemoNormies, detectWallets } from './wallet.js';
 
 const bus = new Phaser.Events.EventEmitter();
 
@@ -110,6 +110,12 @@ const STATE = {
 };
 
 const ui = {
+  launchOverlay: document.getElementById('launch-overlay'),
+  launchStatus: document.getElementById('launch-status'),
+  walletPicker: document.getElementById('wallet-picker'),
+  walletRefresh: document.getElementById('btn-wallet-refresh'),
+  launchWallet: document.getElementById('btn-launch-wallet'),
+  launchDemo: document.getElementById('btn-launch-demo'),
   walletConnect: document.getElementById('btn-wallet-connect'),
   walletDemo: document.getElementById('btn-wallet-demo'),
   walletStatus: document.getElementById('wallet-status'),
@@ -151,6 +157,8 @@ let gameRef = null;
 let overworldRef = null;
 let menuOpen = false;
 let shopOpen = false;
+let detectedWallets = [];
+let selectedWalletId = null;
 const LEAD_NORMIE_TEXTURE_KEY = 'leadNormieAvatar';
 
 function randInt(min, max) {
@@ -266,6 +274,52 @@ function updateWalletStatus(msg = null) {
   }
   const mode = STATE.identity.mode === 'wallet' ? 'wallet' : 'demo';
   ui.walletStatus.textContent = `Wallet: ${shortAddr(STATE.identity.walletAddress)} (${mode}, slot ${slotKey()})`;
+}
+
+function setLaunchStatus(message) {
+  if (ui.launchStatus) ui.launchStatus.textContent = message;
+}
+
+function renderWalletChoices() {
+  if (!ui.walletPicker) return;
+
+  detectedWallets = detectWallets();
+  ui.walletPicker.innerHTML = '';
+
+  if (!detectedWallets.length) {
+    selectedWalletId = null;
+    if (ui.launchWallet) ui.launchWallet.disabled = true;
+    ui.walletPicker.innerHTML = '<div class="wallet-empty">No injected wallet detected. Install MetaMask, Coinbase Wallet, Rabby, or use Demo Mode.</div>';
+    setLaunchStatus('No wallet detected. You can still play instantly in demo mode.');
+    return;
+  }
+
+  const preferred = selectedWalletId && detectedWallets.some((w) => w.id === selectedWalletId)
+    ? selectedWalletId
+    : detectedWallets[0].id;
+
+  selectedWalletId = preferred;
+  detectedWallets.forEach((wallet) => {
+    const button = document.createElement('button');
+    button.className = `wallet-choice${wallet.id === selectedWalletId ? ' active' : ''}`;
+    button.type = 'button';
+    button.dataset.walletId = wallet.id;
+    button.innerHTML = `<span class="wallet-choice-name">${wallet.name}</span><span class="wallet-choice-tag">${wallet.id}</span>`;
+    button.addEventListener('click', () => {
+      selectedWalletId = wallet.id;
+      renderWalletChoices();
+    });
+    ui.walletPicker.appendChild(button);
+  });
+
+  if (ui.launchWallet) ui.launchWallet.disabled = false;
+  const selected = detectedWallets.find((w) => w.id === selectedWalletId);
+  setLaunchStatus(`Selected provider: ${selected?.name || 'Wallet'}.`);
+}
+
+function exitLaunchOverlay() {
+  document.body.classList.remove('prelaunch');
+  ui.launchOverlay?.classList.add('hidden');
 }
 
 function updateHud(zone = null) {
@@ -824,6 +878,7 @@ class OverworldScene extends Phaser.Scene {
 
     this.cameras.main.startFollow(this.player, true, 0.12, 0.12);
     this.cameras.main.setZoom(1.02);
+    this.cameras.main.roundPixels = true;
 
     bus.on('state-reloaded', () => {
       this.refreshLeadAvatar();
@@ -941,6 +996,14 @@ class OverworldScene extends Phaser.Scene {
     } else {
       const pulse = (vx !== 0 || vy !== 0) ? (1.62 + Math.sin(this.time.now / 60) * 0.05) : 1.65;
       this.player.setScale(pulse);
+
+      // Direction-aware body language for static Normie pixel avatar.
+      if (vx < -2) this.player.setFlipX(true);
+      else if (vx > 2) this.player.setFlipX(false);
+
+      const targetTilt = clamp(vx * 0.0024, -0.14, 0.14);
+      this.player.rotation += (targetTilt - this.player.rotation) * 0.18;
+      if (Math.abs(vx) < 1 && Math.abs(vy) < 1) this.player.rotation *= 0.78;
     }
 
     this.npcs.forEach((n) => {
@@ -1234,16 +1297,19 @@ async function hydrateDemoParty() {
   updateHud();
 }
 
-async function hydrateWalletParty() {
+async function hydrateWalletParty(providerId = null) {
   updateWalletStatus('Connecting wallet...');
+  setLaunchStatus('Connecting wallet...');
   try {
-    const { provider, address, walletName } = await connectWallet();
+    const { provider, address, walletName } = await connectWallet(providerId);
     updateWalletStatus('Loading owned Normies...');
+    setLaunchStatus('Loading owned Normies...');
     const owned = await loadWalletNormies(address, provider);
 
     if (!owned.length) {
       showDialogue('Wallet', 'No Normies found in wallet. Switching to demo party for now.');
       await hydrateDemoParty();
+      exitLaunchOverlay();
       return;
     }
 
@@ -1255,14 +1321,23 @@ async function hydrateWalletParty() {
     applyLeadNormieStats();
     buildLeadNormieTexture();
     updateWalletStatus();
+    setLaunchStatus(`Connected ${walletName}: ${shortAddr(address)}.`);
     updateHud();
     bus.emit('state-reloaded');
+    exitLaunchOverlay();
 
     // Auto attempt load from wallet slot so progression follows wallet identity.
     await loadCloud();
   } catch (err) {
     updateWalletStatus(`Wallet connect failed: ${err.message}`);
+    setLaunchStatus(`Wallet connect failed: ${err.message}`);
   }
+}
+
+async function launchDemoMode() {
+  setLaunchStatus('Loading demo party...');
+  await hydrateDemoParty();
+  exitLaunchOverlay();
 }
 
 ui.dialogueClose.addEventListener('click', hideDialogue);
@@ -1272,6 +1347,9 @@ ui.btnSaveCloud.addEventListener('click', saveCloud);
 ui.btnLoadCloud.addEventListener('click', loadCloud);
 ui.walletConnect.addEventListener('click', hydrateWalletParty);
 ui.walletDemo.addEventListener('click', hydrateDemoParty);
+ui.walletRefresh?.addEventListener('click', renderWalletChoices);
+ui.launchWallet?.addEventListener('click', () => hydrateWalletParty(selectedWalletId));
+ui.launchDemo?.addEventListener('click', launchDemoMode);
 
 window.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
@@ -1289,7 +1367,7 @@ gameRef = new Phaser.Game({
   backgroundColor: '#061116',
   scene: [BootScene, OverworldScene, BattleScene, UIScene],
   physics: { default: 'arcade', arcade: { debug: false } },
-  render: { pixelArt: true, antialias: false },
+  render: { pixelArt: true, antialias: false, roundPixels: true },
   scale: { mode: Phaser.Scale.RESIZE, autoCenter: Phaser.Scale.CENTER_BOTH },
 });
 
@@ -1297,5 +1375,5 @@ window.addEventListener('resize', () => {
   if (gameRef) gameRef.scale.resize(window.innerWidth, window.innerHeight);
 });
 
-hydrateDemoParty();
+renderWalletChoices();
 updateHud('Verdant Town');

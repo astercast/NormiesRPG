@@ -7,6 +7,11 @@
   --accent: #f8f8f8;
 }
 
+@keyframes riseIn {
+  from { opacity: 0; transform: translateY(18px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
 * {
   box-sizing: border-box;
 }
@@ -38,6 +43,127 @@ body {
   padding: 8px 12px;
   border-bottom: 1px solid var(--line);
   background: rgba(10, 10, 10, 0.9);
+}
+
+.launch-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(circle at 20% 16%, rgba(255, 255, 255, 0.14), transparent 46%),
+    radial-gradient(circle at 82% 14%, rgba(255, 255, 255, 0.08), transparent 40%),
+    linear-gradient(155deg, rgba(5, 5, 5, 0.88) 0%, rgba(11, 11, 11, 0.95) 52%, rgba(3, 3, 3, 0.95) 100%);
+  padding: 20px;
+}
+
+.launch-card {
+  width: min(900px, 95vw);
+  border: 1px solid rgba(235, 235, 235, 0.33);
+  background: rgba(10, 10, 10, 0.86);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.58);
+  padding: 24px;
+  animation: riseIn 300ms ease-out;
+}
+
+.launch-kicker {
+  margin: 0;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: #d4d4d4;
+}
+
+.launch-title {
+  margin: 6px 0 8px;
+  font-size: clamp(34px, 7vw, 64px);
+  line-height: 0.94;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #fbfbfb;
+}
+
+.launch-subtitle {
+  margin: 0 0 18px;
+  max-width: 70ch;
+  font-size: 14px;
+  color: #cfcfcf;
+}
+
+.wallet-picker-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 8px 0;
+  font-size: 13px;
+  color: #d7d7d7;
+}
+
+.wallet-picker {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 10px;
+}
+
+.wallet-choice {
+  border: 1px solid #4c4c4c;
+  background: #171717;
+  color: #ebebeb;
+  text-align: left;
+  padding: 12px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.wallet-choice:hover {
+  border-color: #b0b0b0;
+}
+
+.wallet-choice.active {
+  border-color: #f3f3f3;
+  background: #2a2a2a;
+}
+
+.wallet-choice-name {
+  font-size: 14px;
+  display: block;
+}
+
+.wallet-choice-tag {
+  font-size: 11px;
+  color: #bbbbbb;
+}
+
+.wallet-empty {
+  grid-column: 1 / -1;
+  border: 1px dashed #5a5a5a;
+  padding: 14px;
+  color: #bdbdbd;
+  font-size: 12px;
+}
+
+.launch-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+}
+
+.launch-status {
+  margin: 10px 0 0;
+  min-height: 16px;
+  font-size: 12px;
+  color: #bfbfbf;
+}
+
+body.prelaunch .wallet-bar,
+body.prelaunch .hud,
+body.prelaunch .help,
+body.prelaunch .quest-banner {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .wallet-status {
@@ -312,6 +438,14 @@ body {
 }
 
 @media (max-width: 720px) {
+  .launch-card {
+    padding: 16px;
+  }
+
+  .launch-title {
+    font-size: clamp(30px, 13vw, 48px);
+  }
+
   .wallet-bar {
     flex-wrap: wrap;
   }
