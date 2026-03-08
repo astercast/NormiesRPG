@@ -3,6 +3,23 @@ import { connectWallet, loadWalletNormies, loadDemoNormies } from './wallet.js';
 
 const bus = new Phaser.Events.EventEmitter();
 
+const ART_CONFIG = {
+  // Drop files in assets/art/... to upgrade visuals without touching code.
+  tilesPath: 'assets/art/tileset/world_tileset_32.png',
+  playerPath: 'assets/art/sprites/player_sheet_32.png',
+  npcPath: 'assets/art/sprites/npc_sheet_32.png',
+  enemyPath: 'assets/art/sprites/enemy_sheet_32.png',
+  frameW: 32,
+  frameH: 32,
+};
+
+const ART_KEYS = {
+  tiles: 'generatedTiles',
+  player: 'playerSheet',
+  npc: 'npcSheet',
+  enemy: 'enemySheet',
+};
+
 const NPCS = {
   elder: { name: 'Elder Vex' },
   smith: { name: 'Forge Ada' },
@@ -12,16 +29,16 @@ const NPCS = {
 
 const ENEMIES_BY_TIER = {
   1: [
-    { id: 'byte_wolf', name: 'Byte Wolf', hp: 76, atk: 12, exp: 30, goldMin: 14, goldMax: 22, color: 0x95d0ff },
-    { id: 'drift_slime', name: 'Drift Slime', hp: 84, atk: 11, exp: 33, goldMin: 15, goldMax: 24, color: 0x8ff3ca },
+    { id: 'byte_wolf', name: 'Byte Wolf', hp: 76, atk: 12, exp: 30, goldMin: 14, goldMax: 22, color: 0xbdbdbd },
+    { id: 'drift_slime', name: 'Drift Slime', hp: 84, atk: 11, exp: 33, goldMin: 15, goldMax: 24, color: 0x9e9e9e },
   ],
   2: [
-    { id: 'hex_raider', name: 'Hex Raider', hp: 102, atk: 16, exp: 43, goldMin: 20, goldMax: 32, color: 0xffc896 },
-    { id: 'error_mantis', name: 'Error Mantis', hp: 112, atk: 17, exp: 47, goldMin: 23, goldMax: 35, color: 0xf2adff },
+    { id: 'hex_raider', name: 'Hex Raider', hp: 102, atk: 16, exp: 43, goldMin: 20, goldMax: 32, color: 0x8a8a8a },
+    { id: 'error_mantis', name: 'Error Mantis', hp: 112, atk: 17, exp: 47, goldMin: 23, goldMax: 35, color: 0xa3a3a3 },
   ],
   3: [
-    { id: 'void_seraph', name: 'Void Seraph', hp: 142, atk: 21, exp: 62, goldMin: 30, goldMax: 45, color: 0xff96aa },
-    { id: 'core_hunter', name: 'Core Hunter', hp: 150, atk: 22, exp: 65, goldMin: 32, goldMax: 48, color: 0xffd98c },
+    { id: 'void_seraph', name: 'Void Seraph', hp: 142, atk: 21, exp: 62, goldMin: 30, goldMax: 45, color: 0x7a7a7a },
+    { id: 'core_hunter', name: 'Core Hunter', hp: 150, atk: 22, exp: 65, goldMin: 32, goldMax: 48, color: 0x6a6a6a },
   ],
 };
 
@@ -34,7 +51,7 @@ const BOSSES = {
     exp: 170,
     goldMin: 95,
     goldMax: 130,
-    color: 0xff6f6f,
+    color: 0x5a5a5a,
   },
 };
 
@@ -134,6 +151,7 @@ let gameRef = null;
 let overworldRef = null;
 let menuOpen = false;
 let shopOpen = false;
+const LEAD_NORMIE_TEXTURE_KEY = 'leadNormieAvatar';
 
 function randInt(min, max) {
   return Math.floor(min + Math.random() * (max - min + 1));
@@ -159,6 +177,41 @@ function itemById(id) {
 function leadNormie() {
   if (!STATE.party.roster.length) return null;
   return STATE.party.roster.find((n) => n.id === STATE.party.leadId) || STATE.party.roster[0];
+}
+
+function buildLeadNormieTexture() {
+  if (!gameRef) return false;
+  const lead = leadNormie();
+  const px = lead?.pixels || '';
+  if (!px || px.length < 1600) return false;
+
+  const size = 40;
+  const cv = document.createElement('canvas');
+  cv.width = size;
+  cv.height = size;
+  const ctx = cv.getContext('2d');
+  ctx.clearRect(0, 0, size, size);
+  ctx.fillStyle = '#000000';
+
+  // Keep only dark pixels from the Normie bitmap.
+  for (let y = 0; y < size; y += 1) {
+    for (let x = 0; x < size; x += 1) {
+      const i = y * size + x;
+      if (px[i] === '1') ctx.fillRect(x, y, 1, 1);
+    }
+  }
+
+  if (gameRef.textures.exists(LEAD_NORMIE_TEXTURE_KEY)) {
+    gameRef.textures.remove(LEAD_NORMIE_TEXTURE_KEY);
+  }
+  gameRef.textures.addCanvas(LEAD_NORMIE_TEXTURE_KEY, cv);
+  return true;
+}
+
+function leadAvatarKey() {
+  return gameRef?.textures?.exists(LEAD_NORMIE_TEXTURE_KEY)
+    ? LEAD_NORMIE_TEXTURE_KEY
+    : ART_KEYS.player;
 }
 
 function applyLeadNormieStats() {
@@ -272,6 +325,7 @@ function applyCloudPayload(data) {
   STATE.meta = data.meta || STATE.meta;
 
   applyLeadNormieStats();
+  buildLeadNormieTexture();
   STATE.player.hp = clamp(STATE.player.hp, 1, maxHp());
   updateWalletStatus();
   updateHud();
@@ -315,10 +369,7 @@ async function loadCloud() {
 }
 
 function partyTintByType(type) {
-  if (type === 'Cat') return 0xa7d3ff;
-  if (type === 'Alien') return 0xc8ffb0;
-  if (type === 'Agent') return 0xffd09a;
-  return 0xa7fff1;
+  return 0xffffff;
 }
 
 function renderPartyMenu() {
@@ -337,6 +388,8 @@ function renderPartyMenu() {
       STATE.party.leadId = Number(btn.dataset.lead);
       applyLeadNormieStats();
       STATE.player.hp = clamp(STATE.player.hp, 1, maxHp());
+      buildLeadNormieTexture();
+      bus.emit('lead-changed');
       updateHud();
       renderPartyMenu();
     });
@@ -561,19 +614,49 @@ function tintFromLead() {
 class BootScene extends Phaser.Scene {
   constructor() {
     super('BootScene');
+    this.hasExternalArt = false;
   }
 
   preload() {
     this.load.tilemapTiledJSON('overworld', 'assets/maps/overworld.json');
     this.load.tilemapTiledJSON('town', 'assets/maps/town.json');
     this.load.tilemapTiledJSON('ruins', 'assets/maps/ruins.json');
+
+    // Optional high-fidelity art pack inputs.
+    this.load.image('tilesExternal', ART_CONFIG.tilesPath);
+    this.load.spritesheet('playerExternal', ART_CONFIG.playerPath, {
+      frameWidth: ART_CONFIG.frameW,
+      frameHeight: ART_CONFIG.frameH,
+    });
+    this.load.spritesheet('npcExternal', ART_CONFIG.npcPath, {
+      frameWidth: ART_CONFIG.frameW,
+      frameHeight: ART_CONFIG.frameH,
+    });
+    this.load.spritesheet('enemyExternal', ART_CONFIG.enemyPath, {
+      frameWidth: ART_CONFIG.frameW,
+      frameHeight: ART_CONFIG.frameH,
+    });
   }
 
   create() {
-    this.generateTileTexture();
-    this.generatePlayerSheet();
-    this.generateNpcSheet();
-    this.generateEnemySheet();
+    this.hasExternalArt =
+      this.textures.exists('tilesExternal') &&
+      this.textures.exists('playerExternal') &&
+      this.textures.exists('npcExternal') &&
+      this.textures.exists('enemyExternal');
+
+    if (this.hasExternalArt) {
+      ART_KEYS.tiles = 'tilesExternal';
+      ART_KEYS.player = 'playerExternal';
+      ART_KEYS.npc = 'npcExternal';
+      ART_KEYS.enemy = 'enemyExternal';
+    } else {
+      this.generateTileTexture();
+      this.generatePlayerSheet();
+      this.generateNpcSheet();
+      this.generateEnemySheet();
+    }
+
     this.createAnimations();
 
     this.scene.start('OverworldScene');
@@ -605,7 +688,7 @@ class BootScene extends Phaser.Scene {
     fillTile(2, 1, '#4f564c', '#6c7568');
     fillTile(3, 1, '#383c41', '#575d63');
 
-    this.textures.addCanvas('generatedTiles', cv);
+    this.textures.addCanvas(ART_KEYS.tiles, cv);
   }
 
   generatePlayerSheet() {
@@ -634,7 +717,7 @@ class BootScene extends Phaser.Scene {
       drawFrame(2, row, -2);
     }
 
-    this.textures.addSpriteSheet('playerSheet', cv, { frameWidth: 32, frameHeight: 32 });
+    this.textures.addSpriteSheet(ART_KEYS.player, cv, { frameWidth: 32, frameHeight: 32 });
   }
 
   generateNpcSheet() {
@@ -657,7 +740,7 @@ class BootScene extends Phaser.Scene {
       ctx.fillRect(x + 18, 24, 4, 6 + (i === 2 ? 1 : 0));
     }
 
-    this.textures.addSpriteSheet('npcSheet', cv, { frameWidth: 32, frameHeight: 32 });
+    this.textures.addSpriteSheet(ART_KEYS.npc, cv, { frameWidth: 32, frameHeight: 32 });
   }
 
   generateEnemySheet() {
@@ -678,16 +761,16 @@ class BootScene extends Phaser.Scene {
       ctx.fillRect(x + 14, 20 + (i === 1 ? 1 : 0), 4, 5);
     }
 
-    this.textures.addSpriteSheet('enemySheet', cv, { frameWidth: 32, frameHeight: 32 });
+    this.textures.addSpriteSheet(ART_KEYS.enemy, cv, { frameWidth: 32, frameHeight: 32 });
   }
 
   createAnimations() {
-    this.anims.create({ key: 'player-down', frames: this.anims.generateFrameNumbers('playerSheet', { frames: [0, 1, 2] }), frameRate: 9, repeat: -1 });
-    this.anims.create({ key: 'player-left', frames: this.anims.generateFrameNumbers('playerSheet', { frames: [3, 4, 5] }), frameRate: 9, repeat: -1 });
-    this.anims.create({ key: 'player-right', frames: this.anims.generateFrameNumbers('playerSheet', { frames: [6, 7, 8] }), frameRate: 9, repeat: -1 });
-    this.anims.create({ key: 'player-up', frames: this.anims.generateFrameNumbers('playerSheet', { frames: [9, 10, 11] }), frameRate: 9, repeat: -1 });
-    this.anims.create({ key: 'npc-idle', frames: this.anims.generateFrameNumbers('npcSheet', { frames: [0, 1, 2] }), frameRate: 4, repeat: -1 });
-    this.anims.create({ key: 'enemy-idle', frames: this.anims.generateFrameNumbers('enemySheet', { frames: [0, 1, 2] }), frameRate: 5, repeat: -1 });
+    this.anims.create({ key: 'player-down', frames: this.anims.generateFrameNumbers(ART_KEYS.player, { frames: [0, 1, 2] }), frameRate: 9, repeat: -1 });
+    this.anims.create({ key: 'player-left', frames: this.anims.generateFrameNumbers(ART_KEYS.player, { frames: [3, 4, 5] }), frameRate: 9, repeat: -1 });
+    this.anims.create({ key: 'player-right', frames: this.anims.generateFrameNumbers(ART_KEYS.player, { frames: [6, 7, 8] }), frameRate: 9, repeat: -1 });
+    this.anims.create({ key: 'player-up', frames: this.anims.generateFrameNumbers(ART_KEYS.player, { frames: [9, 10, 11] }), frameRate: 9, repeat: -1 });
+    this.anims.create({ key: 'npc-idle', frames: this.anims.generateFrameNumbers(ART_KEYS.npc, { frames: [0, 1, 2] }), frameRate: 4, repeat: -1 });
+    this.anims.create({ key: 'enemy-idle', frames: this.anims.generateFrameNumbers(ART_KEYS.enemy, { frames: [0, 1, 2] }), frameRate: 5, repeat: -1 });
   }
 }
 
@@ -733,7 +816,7 @@ class OverworldScene extends Phaser.Scene {
     this.physics.world.setFPS(60);
     this.keys = this.input.keyboard.addKeys('W,A,S,D,UP,DOWN,LEFT,RIGHT,SHIFT,E,I');
 
-    this.player = this.physics.add.sprite(0, 0, 'playerSheet', 0).setScale(2).setDepth(10);
+    this.player = this.physics.add.sprite(0, 0, leadAvatarKey(), 0).setScale(1.65).setDepth(10);
     this.player.body.setSize(16, 12).setOffset(8, 18);
     this.player.setTint(tintFromLead());
 
@@ -743,9 +826,14 @@ class OverworldScene extends Phaser.Scene {
     this.cameras.main.setZoom(1.02);
 
     bus.on('state-reloaded', () => {
-      this.player.setTint(tintFromLead());
+      this.refreshLeadAvatar();
       this.loadMap(STATE.world.mapId, STATE.world.spawnName);
-      this.player.anims.play('player-down', true);
+      if (this.player.texture.key === ART_KEYS.player) this.player.anims.play('player-down', true);
+    });
+
+    bus.on('lead-changed', () => {
+      this.refreshLeadAvatar();
+      bus.emit('hud-refresh');
     });
 
     bus.on('battle-finished', (result) => {
@@ -755,6 +843,20 @@ class OverworldScene extends Phaser.Scene {
       this.encounterCooldown = 900;
       bus.emit('hud-refresh');
     });
+  }
+
+  refreshLeadAvatar() {
+    const key = leadAvatarKey();
+    this.player.setTexture(key, 0);
+    if (key === LEAD_NORMIE_TEXTURE_KEY) {
+      this.player.setScale(1.65);
+      this.player.body.setSize(20, 20).setOffset(10, 10);
+      this.player.clearTint();
+    } else {
+      this.player.setScale(2);
+      this.player.body.setSize(16, 12).setOffset(8, 18);
+      this.player.setTint(tintFromLead());
+    }
   }
 
   zoneFromMap() {
@@ -778,7 +880,7 @@ class OverworldScene extends Phaser.Scene {
     this.clearMapObjects();
 
     this.map = this.make.tilemap({ key: mapId });
-    this.tileset = this.map.addTilesetImage('generated-tileset', 'generatedTiles', 32, 32, 0, 0, 1);
+    this.tileset = this.map.addTilesetImage('generated-tileset', ART_KEYS.tiles, 32, 32, 0, 0, 1);
 
     this.groundLayer = this.map.createLayer('ground', this.tileset, 0, 0).setScale(2);
     this.collisionLayer = this.map.createLayer('collision', this.tileset, 0, 0).setScale(2).setVisible(false);
@@ -798,7 +900,7 @@ class OverworldScene extends Phaser.Scene {
       if (obj.type === 'npc') {
         const npcId = getObjectProp(obj, 'npcId', 'elder');
         const npcData = NPCS[npcId] || NPCS.elder;
-        const spr = this.add.sprite((obj.x + 16) * 2, (obj.y + 16) * 2, 'npcSheet', 0).setScale(2).setDepth(9);
+        const spr = this.add.sprite((obj.x + 16) * 2, (obj.y + 16) * 2, ART_KEYS.npc, 0).setScale(2).setDepth(9);
         spr.anims.play('npc-idle', true);
         this.npcs.push({ id: npcId, data: npcData, sprite: spr });
       }
@@ -831,14 +933,19 @@ class OverworldScene extends Phaser.Scene {
 
     this.player.body.setVelocity(vx, vy);
 
-    if (vx !== 0 || vy !== 0) {
-      if (Math.abs(vx) > Math.abs(vy)) this.player.anims.play(vx < 0 ? 'player-left' : 'player-right', true);
-      else this.player.anims.play(vy < 0 ? 'player-up' : 'player-down', true);
-    } else this.player.anims.stop();
+    if (this.player.texture.key === ART_KEYS.player) {
+      if (vx !== 0 || vy !== 0) {
+        if (Math.abs(vx) > Math.abs(vy)) this.player.anims.play(vx < 0 ? 'player-left' : 'player-right', true);
+        else this.player.anims.play(vy < 0 ? 'player-up' : 'player-down', true);
+      } else this.player.anims.stop();
+    } else {
+      const pulse = (vx !== 0 || vy !== 0) ? (1.62 + Math.sin(this.time.now / 60) * 0.05) : 1.65;
+      this.player.setScale(pulse);
+    }
 
     this.npcs.forEach((n) => {
       const d = Phaser.Math.Distance.Between(this.player.x, this.player.y, n.sprite.x, n.sprite.y);
-      n.sprite.setTint(d < 95 ? 0xaef9ef : 0xffffff);
+      n.sprite.setTint(d < 95 ? 0xd0d0d0 : 0xffffff);
     });
 
     if (this.encounterCooldown > 0) this.encounterCooldown = Math.max(0, this.encounterCooldown - delta);
@@ -962,15 +1069,21 @@ class BattleScene extends Phaser.Scene {
     const h = this.scale.height;
     this.add.rectangle(w * 0.5, h * 0.5, w, h, 0x04090b, 0.42);
 
-    this.heroSprite = this.add.sprite(w * 0.28, h * 0.55, 'playerSheet', 0).setScale(4.2).setDepth(2);
-    this.heroSprite.anims.play('player-right', true);
-    this.heroSprite.setTint(tintFromLead());
+    const heroKey = leadAvatarKey();
+    this.heroSprite = this.add.sprite(w * 0.28, h * 0.55, heroKey, 0).setScale(heroKey === LEAD_NORMIE_TEXTURE_KEY ? 3.2 : 4.2).setDepth(2);
+    if (heroKey === ART_KEYS.player) {
+      this.heroSprite.anims.play('player-right', true);
+      this.heroSprite.setTint(tintFromLead());
+    } else {
+      this.heroSprite.clearTint();
+      this.tweens.add({ targets: this.heroSprite, y: this.heroSprite.y - 4, duration: 420, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+    }
 
-    this.enemySprite = this.add.sprite(w * 0.72, h * 0.43, 'enemySheet', 0).setScale(4.7).setDepth(2);
+    this.enemySprite = this.add.sprite(w * 0.72, h * 0.43, ART_KEYS.enemy, 0).setScale(4.7).setDepth(2);
     this.enemySprite.anims.play('enemy-idle', true);
     this.enemySprite.setTint(enemy.color || 0xffffff);
 
-    this.slashEmitter = this.add.particles(0, 0, 'enemySheet', {
+    this.slashEmitter = this.add.particles(0, 0, ART_KEYS.enemy, {
       frame: 1,
       lifespan: 280,
       speed: { min: 80, max: 190 },
@@ -1115,6 +1228,8 @@ async function hydrateDemoParty() {
   STATE.identity.walletAddress = null;
   STATE.identity.walletName = 'Demo';
   applyLeadNormieStats();
+  buildLeadNormieTexture();
+  bus.emit('state-reloaded');
   updateWalletStatus();
   updateHud();
 }
@@ -1138,6 +1253,7 @@ async function hydrateWalletParty() {
     STATE.identity.walletAddress = address;
     STATE.identity.walletName = walletName;
     applyLeadNormieStats();
+    buildLeadNormieTexture();
     updateWalletStatus();
     updateHud();
     bus.emit('state-reloaded');

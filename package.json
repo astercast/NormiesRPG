@@ -2,6 +2,10 @@
   "name": "normies-rpg",
   "version": "2.0.0",
   "description": "Normies RPG — on-chain pixel adventure",
+  "dependencies": {
+    "@upstash/redis": "^1.35.6",
+    "phaser": "^3.90.0"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
