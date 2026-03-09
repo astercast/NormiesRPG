@@ -701,47 +701,19 @@ class BootScene extends Phaser.Scene {
   }
 
   preload() {
+    // Only load map data — sprites/tiles are generated at runtime so there
+    // are no external file dependencies that can break rendering.
     this.load.tilemapTiledJSON('overworld', 'assets/maps/overworld.json');
     this.load.tilemapTiledJSON('town', 'assets/maps/town.json');
     this.load.tilemapTiledJSON('ruins', 'assets/maps/ruins.json');
-
-    // Optional high-fidelity art pack inputs.
-    this.load.image('tilesExternal', ART_CONFIG.tilesPath);
-    this.load.spritesheet('playerExternal', ART_CONFIG.playerPath, {
-      frameWidth: ART_CONFIG.frameW,
-      frameHeight: ART_CONFIG.frameH,
-    });
-    this.load.spritesheet('npcExternal', ART_CONFIG.npcPath, {
-      frameWidth: ART_CONFIG.frameW,
-      frameHeight: ART_CONFIG.frameH,
-    });
-    this.load.spritesheet('enemyExternal', ART_CONFIG.enemyPath, {
-      frameWidth: ART_CONFIG.frameW,
-      frameHeight: ART_CONFIG.frameH,
-    });
   }
 
   create() {
-    this.hasExternalArt =
-      this.textures.exists('tilesExternal') &&
-      this.textures.exists('playerExternal') &&
-      this.textures.exists('npcExternal') &&
-      this.textures.exists('enemyExternal');
-
-    if (this.hasExternalArt) {
-      ART_KEYS.tiles = 'tilesExternal';
-      ART_KEYS.player = 'playerExternal';
-      ART_KEYS.npc = 'npcExternal';
-      ART_KEYS.enemy = 'enemyExternal';
-    } else {
-      this.generateTileTexture();
-      this.generatePlayerSheet();
-      this.generateNpcSheet();
-      this.generateEnemySheet();
-    }
-
+    this.generateTileTexture();
+    this.generatePlayerSheet();
+    this.generateNpcSheet();
+    this.generateEnemySheet();
     this.createAnimations();
-
     this.scene.start('OverworldScene');
     this.scene.launch('UIScene');
   }
@@ -751,25 +723,57 @@ class BootScene extends Phaser.Scene {
     cv.width = 128;
     cv.height = 128;
     const ctx = cv.getContext('2d');
-    const sw = 32;
+    const S = 32;
 
-    const fillTile = (tx, ty, color, accent = null) => {
-      ctx.fillStyle = color;
-      ctx.fillRect(tx * sw, ty * sw, sw, sw);
-      if (accent) {
-        ctx.fillStyle = accent;
-        for (let i = 0; i < 4; i += 1) ctx.fillRect(tx * sw + 4 + i * 7, ty * sw + 6 + (i % 2) * 5, 4, 4);
+    // Draw a tile with a base fill, optional dot detail, and optional grid edge lines.
+    const tile = (tx, ty, base, detail, grid) => {
+      const x = tx * S; const y = ty * S;
+      ctx.fillStyle = base;
+      ctx.fillRect(x, y, S, S);
+      if (detail) {
+        ctx.fillStyle = detail;
+        for (let dy = 4; dy < S - 4; dy += 8)
+          for (let dx = 4; dx < S - 4; dx += 8)
+            ctx.fillRect(x + dx, y + dy, 2, 2);
+      }
+      if (grid) {
+        ctx.fillStyle = grid;
+        ctx.fillRect(x, y + S - 1, S, 1);
+        ctx.fillRect(x + S - 1, y, 1, S);
       }
     };
 
-    fillTile(0, 0, '#0b2a3f', '#185b83');
-    fillTile(1, 0, '#156185', '#2f8fb4');
-    fillTile(2, 0, '#7a7965', '#9a987f');
-    fillTile(3, 0, '#255f4b', '#31795f');
-    fillTile(0, 1, '#2a2f36', '#494f57');
-    fillTile(1, 1, '#666a70', '#8c9198');
-    fillTile(2, 1, '#4f564c', '#6c7568');
-    fillTile(3, 1, '#383c41', '#575d63');
+    // Row 0 — outdoor ground tiles (tile IDs 1-4)
+    // ID 1: main outdoor floor — bright so the overworld is always visible
+    tile(0, 0, '#b4bec0', '#c8d2d4', '#9eaaac');
+    // ID 2: slightly darker outdoor
+    tile(1, 0, '#8a989c', '#9aacb0', '#7a8890');
+    // ID 3: path / stone
+    tile(2, 0, '#6a7478', '#7a8488', '#5a666a');
+    // ID 4: dark stone / wall
+    tile(3, 0, '#2a3038', '#343c44', '#1e262e');
+
+    // Row 1 — indoor / town floor tiles (tile IDs 5-8)
+    // ID 5: main indoor floor — bright stone, used throughout town
+    tile(0, 1, '#c0cac8', '#d0d8d6', '#a8b4b2');
+    // ID 6: slightly darker indoor stone
+    tile(1, 1, '#848e8c', '#949e9c', '#747e7c');
+    // ID 7: dungeon / ruin floor
+    tile(2, 1, '#484e54', '#585e64', '#383e44');
+    // ID 8: bright highlight / special
+    tile(3, 1, '#dce4e4', '#eaf0f0', '#c8d0d0');
+
+    // Row 2 — wall / decoration tiles (IDs 9-12)
+    tile(0, 2, '#1a2028', '#242a32', '#121820');
+    tile(1, 2, '#243038', '#2e3c44', '#18242c');
+    tile(2, 2, '#303840', '#3c444c', '#242c34');
+    tile(3, 2, '#3c4450', '#48505c', '#30383c');
+
+    // Row 3 — water / special (IDs 13-16)
+    tile(0, 3, '#18242e', '#204050', '#101c24');
+    tile(1, 3, '#204858', '#286070', '#18404e');
+    tile(2, 3, '#10181e', '#181e26', '#0c1016');
+    tile(3, 3, '#e8e8e8', '#f4f4f4', '#cccccc');
 
     this.textures.addCanvas(ART_KEYS.tiles, cv);
   }
@@ -780,24 +784,58 @@ class BootScene extends Phaser.Scene {
     cv.height = 128;
     const ctx = cv.getContext('2d');
 
-    const drawFrame = (fx, fy, legOffset = 0) => {
-      const x = fx * 32;
-      const y = fy * 32;
-      ctx.fillStyle = '#1a2d34';
-      ctx.fillRect(x + 10, y + 6, 12, 12);
-      ctx.fillStyle = '#a7fff1';
+    const drawFrame = (col, row, legL = 0, legR = 0, facing = 'down') => {
+      const x = col * 32;
+      const y = row * 32;
+
+      // Drop shadow
+      ctx.fillStyle = 'rgba(0,0,0,0.28)';
+      ctx.fillRect(x + 10, y + 29, 12, 2);
+
+      // Legs
+      ctx.fillStyle = '#8090a0';
+      ctx.fillRect(x + 12, y + 22, 4, 7 + legL);
+      ctx.fillRect(x + 16, y + 22, 4, 7 + legR);
+      // Leg boots
+      ctx.fillStyle = '#404850';
+      ctx.fillRect(x + 12, y + 26 + legL, 4, 3);
+      ctx.fillRect(x + 16, y + 26 + legR, 4, 3);
+
+      // Body outline
+      ctx.fillStyle = '#1e242a';
       ctx.fillRect(x + 9, y + 11, 14, 12);
-      ctx.fillStyle = '#133a43';
-      ctx.fillRect(x + 10, y + 8, 12, 4);
-      ctx.fillStyle = '#a7fff1';
-      ctx.fillRect(x + 10, y + 23, 4, 7 + legOffset);
-      ctx.fillRect(x + 18, y + 23, 4, 7 - legOffset);
+      // Body fill — armor
+      ctx.fillStyle = '#606870';
+      ctx.fillRect(x + 10, y + 12, 12, 10);
+      // Chest highlight
+      ctx.fillStyle = '#8090a0';
+      ctx.fillRect(x + 11, y + 13, 4, 4);
+
+      // Arms
+      ctx.fillStyle = '#606870';
+      ctx.fillRect(x + 6, y + 12, 4, 6);
+      ctx.fillRect(x + 22, y + 12, 4, 6);
+
+      // Head outline
+      ctx.fillStyle = '#1e242a';
+      ctx.fillRect(x + 10, y + 3, 12, 10);
+      // Head fill
+      ctx.fillStyle = '#d4d8dc';
+      ctx.fillRect(x + 11, y + 4, 10, 8);
+      // Visor / eye strip
+      ctx.fillStyle = '#1a2028';
+      ctx.fillRect(x + 11, y + 6, 10, 3);
+      // Visor glow — eye holes
+      ctx.fillStyle = '#c8e8ff';
+      ctx.fillRect(x + 12, y + 7, 3, 1);
+      ctx.fillRect(x + 17, y + 7, 3, 1);
     };
 
+    // 4 directions × 3 animation frames
     for (let row = 0; row < 4; row += 1) {
-      drawFrame(0, row, 0);
-      drawFrame(1, row, 2);
-      drawFrame(2, row, -2);
+      drawFrame(0, row, 0, 0);
+      drawFrame(1, row, 3, -1);
+      drawFrame(2, row, -1, 3);
     }
 
     this.textures.addSpriteSheet(ART_KEYS.player, cv, { frameWidth: 32, frameHeight: 32 });
@@ -811,16 +849,31 @@ class BootScene extends Phaser.Scene {
 
     for (let i = 0; i < 3; i += 1) {
       const x = i * 32;
-      ctx.fillStyle = '#3c261a';
-      ctx.fillRect(x + 9, 6, 14, 12);
-      ctx.fillStyle = '#ffc891';
-      ctx.fillRect(x + 9, 11, 14, 12);
-      ctx.fillStyle = '#1f1410';
-      ctx.fillRect(x + 11, 9, 3, 3);
-      ctx.fillRect(x + 18, 9, 3, 3);
-      ctx.fillStyle = '#ffc891';
-      ctx.fillRect(x + 10, 24, 4, 6 + (i === 1 ? 1 : 0));
-      ctx.fillRect(x + 18, 24, 4, 6 + (i === 2 ? 1 : 0));
+      const bob = i === 1 ? -1 : 0;
+
+      // Cloak body (friendly warm tone)
+      ctx.fillStyle = '#1e2a22';
+      ctx.fillRect(x + 8, 13 + bob, 16, 14);
+      ctx.fillStyle = '#3a5040';
+      ctx.fillRect(x + 9, 14 + bob, 14, 12);
+
+      // Head outline
+      ctx.fillStyle = '#1e2420';
+      ctx.fillRect(x + 10, 3 + bob, 12, 11);
+      // Face
+      ctx.fillStyle = '#c8b8a0';
+      ctx.fillRect(x + 11, 4 + bob, 10, 9);
+      // Eyes
+      ctx.fillStyle = '#201c18';
+      ctx.fillRect(x + 13, 6 + bob, 2, 2);
+      ctx.fillRect(x + 17, 6 + bob, 2, 2);
+      // Hood
+      ctx.fillStyle = '#2a3828';
+      ctx.fillRect(x + 10, 3 + bob, 12, 3);
+
+      // Staff / walking stick
+      ctx.fillStyle = '#8a6840';
+      ctx.fillRect(x + 22, 8 + bob, 2, 18);
     }
 
     this.textures.addSpriteSheet(ART_KEYS.npc, cv, { frameWidth: 32, frameHeight: 32 });
@@ -834,14 +887,37 @@ class BootScene extends Phaser.Scene {
 
     for (let i = 0; i < 3; i += 1) {
       const x = i * 32;
-      ctx.fillStyle = '#2f1d2a';
-      ctx.fillRect(x + 7, 8, 18, 14);
-      ctx.fillStyle = '#ff8da1';
-      ctx.fillRect(x + 8, 9, 16, 12);
-      ctx.fillStyle = '#2f1d2a';
-      ctx.fillRect(x + 11, 12, 3, 3);
-      ctx.fillRect(x + 18, 12, 3, 3);
-      ctx.fillRect(x + 14, 20 + (i === 1 ? 1 : 0), 4, 5);
+      const pulse = i === 1 ? -1 : (i === 2 ? 1 : 0);
+
+      // Tendrils / appendages
+      ctx.fillStyle = '#1e0e18';
+      ctx.fillRect(x + 4, 14 + pulse, 4, 10);
+      ctx.fillRect(x + 24, 14 + pulse, 4, 10);
+
+      // Body shadow
+      ctx.fillStyle = '#120a10';
+      ctx.fillRect(x + 6, 8 + pulse, 20, 18);
+      // Body fill
+      ctx.fillStyle = '#2a1828';
+      ctx.fillRect(x + 7, 9 + pulse, 18, 16);
+      // Body shimmer
+      ctx.fillStyle = '#3c2438';
+      ctx.fillRect(x + 9, 10 + pulse, 6, 8);
+
+      // Head
+      ctx.fillStyle = '#1a0e18';
+      ctx.fillRect(x + 9, 3 + pulse, 14, 10);
+      ctx.fillStyle = '#301828';
+      ctx.fillRect(x + 10, 4 + pulse, 12, 8);
+
+      // Glowing eyes — white/bright so always visible
+      ctx.fillStyle = '#f0f8ff';
+      ctx.fillRect(x + 11, 6 + pulse, 4, 3);
+      ctx.fillRect(x + 17, 6 + pulse, 4, 3);
+      // Eye pupils
+      ctx.fillStyle = '#60b8ff';
+      ctx.fillRect(x + 12, 7 + pulse, 2, 1);
+      ctx.fillRect(x + 18, 7 + pulse, 2, 1);
     }
 
     this.textures.addSpriteSheet(ART_KEYS.enemy, cv, { frameWidth: 32, frameHeight: 32 });
@@ -1396,7 +1472,7 @@ gameRef = new Phaser.Game({
   parent: 'game-root',
   width: window.innerWidth,
   height: window.innerHeight,
-  backgroundColor: '#061116',
+  backgroundColor: '#0e1820',
   scene: [BootScene, OverworldScene, BattleScene, UIScene],
   physics: { default: 'arcade', arcade: { debug: false } },
   render: { pixelArt: true, antialias: false, roundPixels: true },

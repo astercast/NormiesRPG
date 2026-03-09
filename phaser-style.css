@@ -1,175 +1,211 @@
+﻿/* ======================================================
+   NORMIES RPG — UI shell
+   ====================================================== */
+
+/* ── Global tokens ── */
 :root {
-  --bg: #101010;
-  --panel: rgba(20, 20, 20, 0.88);
-  --line: rgba(210, 210, 210, 0.35);
-  --text: #f2f2f2;
-  --muted: #b8b8b8;
-  --accent: #f8f8f8;
+  --bg: #0e1318;
+  --panel: rgba(14, 19, 24, 0.92);
+  --line: rgba(200, 210, 220, 0.18);
+  --text: #edf0f3;
+  --muted: #7a8890;
+  --accent: #edf0f3;
 }
 
+/* ── Dark theme (default) ── */
 body[data-ui-theme="dark"] {
-  --shell-bg: linear-gradient(155deg, rgba(5, 5, 5, 0.9) 0%, rgba(14, 14, 14, 0.96) 56%, rgba(3, 3, 3, 0.96) 100%);
-  --shell-overlay: radial-gradient(circle at 20% 16%, rgba(255, 255, 255, 0.12), transparent 46%), radial-gradient(circle at 82% 14%, rgba(255, 255, 255, 0.06), transparent 40%);
-  --shell-card: rgba(10, 10, 10, 0.9);
-  --shell-line: rgba(235, 235, 235, 0.34);
-  --shell-text: #f5f5f5;
-  --shell-muted: #c5c5c5;
-  --shell-btn: #1d1d1d;
-  --shell-btn-alt: #131313;
+  --shell-bg:        #090c0e;
+  --shell-card:      #0e1318;
+  --shell-card-hi:   #141c22;
+  --shell-line:      rgba(255, 255, 255, 0.13);
+  --shell-line-hi:   rgba(255, 255, 255, 0.38);
+  --shell-text:      #edf0f3;
+  --shell-muted:     #7a8890;
+  --shell-btn:       #181e24;
+  --shell-btn-alt:   #0e1318;
+  --shell-scrim:     rgba(4, 6, 8, 0.94);
 }
 
+/* ── Light theme ── */
 body[data-ui-theme="light"] {
-  --shell-bg: linear-gradient(155deg, rgba(246, 246, 246, 0.92) 0%, rgba(233, 233, 233, 0.96) 56%, rgba(252, 252, 252, 0.96) 100%);
-  --shell-overlay: radial-gradient(circle at 20% 16%, rgba(0, 0, 0, 0.09), transparent 48%), radial-gradient(circle at 82% 14%, rgba(0, 0, 0, 0.06), transparent 44%);
-  --shell-card: rgba(255, 255, 255, 0.88);
-  --shell-line: rgba(28, 28, 28, 0.3);
-  --shell-text: #181818;
-  --shell-muted: #444444;
-  --shell-btn: #ffffff;
-  --shell-btn-alt: #ececec;
+  --shell-bg:        #eef0f3;
+  --shell-card:      #ffffff;
+  --shell-card-hi:   #f4f6f8;
+  --shell-line:      rgba(0, 0, 0, 0.12);
+  --shell-line-hi:   rgba(0, 0, 0, 0.36);
+  --shell-text:      #0e1318;
+  --shell-muted:     #5a6268;
+  --shell-btn:       #e8ecf0;
+  --shell-btn-alt:   #f0f2f5;
+  --shell-scrim:     rgba(224, 228, 232, 0.97);
 }
 
 @keyframes riseIn {
-  from { opacity: 0; transform: translateY(18px) scale(0.98); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
+  from { opacity: 0; transform: translateY(12px) scale(0.988); }
+  to   { opacity: 1; transform: translateY(0)    scale(1); }
 }
 
-* {
-  box-sizing: border-box;
-}
+/* ── Reset ── */
+*, *::before, *::after { box-sizing: border-box; }
 
-html,
-body {
+html, body {
   margin: 0;
   height: 100%;
   background: var(--shell-bg);
-  color: var(--text);
+  color: var(--shell-text);
   font-family: "Space Grotesk", "Segoe UI", sans-serif;
   overflow: hidden;
 }
 
-#game-root {
-  position: fixed;
-  inset: 0;
+#game-root { position: fixed; inset: 0; }
+
+/* ── Buttons ──────────────────────────────── */
+.btn {
+  background:    var(--shell-btn);
+  color:         var(--shell-text);
+  border:        1px solid var(--shell-line);
+  padding:       8px 16px;
+  font-family:   inherit;
+  font-size:     12px;
+  font-weight:   500;
+  letter-spacing: 0.05em;
+  cursor:        pointer;
+  transition:    background 110ms, border-color 110ms;
+  white-space:   nowrap;
 }
 
-.wallet-bar {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 26;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--line);
-  background: rgba(10, 10, 10, 0.9);
+.btn.alt { background: var(--shell-btn-alt); }
+
+.btn:hover:not(:disabled) {
+  border-color: var(--shell-line-hi);
 }
 
+.btn:disabled { opacity: 0.38; cursor: not-allowed; }
+
+.hidden { display: none !important; }
+
+/* ── Prelaunch dim ── */
+body.prelaunch .wallet-bar,
+body.prelaunch .hud,
+body.prelaunch .help,
+body.prelaunch .quest-banner {
+  opacity: 0.15;
+  filter: grayscale(1);
+  pointer-events: none;
+}
+
+/* ── Launch Overlay ──────────────────────── */
 .launch-overlay {
   position: fixed;
   inset: 0;
   z-index: 60;
   display: grid;
   place-items: center;
-  background: var(--shell-overlay), var(--shell-bg);
+  background: var(--shell-scrim);
   padding: 20px;
 }
 
 .launch-card {
-  width: min(900px, 95vw);
-  border: 1px solid var(--shell-line);
+  width: min(900px, 96vw);
+  border: 1px solid var(--shell-line-hi);
   background: var(--shell-card);
-  backdrop-filter: blur(10px);
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.58);
-  padding: 24px;
-  animation: riseIn 300ms ease-out;
+  box-shadow: 0 32px 90px rgba(0, 0, 0, 0.6);
+  padding: 30px 36px;
+  animation: riseIn 260ms ease-out;
 }
 
 .launch-topline {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 8px;
+  margin-bottom: 14px;
 }
 
 .launch-site {
-  color: var(--shell-text);
+  color: var(--shell-muted);
   text-decoration: none;
-  font-size: 12px;
-  letter-spacing: 0.08em;
+  font-size: 11px;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
   border: 1px solid var(--shell-line);
-  padding: 6px 8px;
+  padding: 4px 8px;
+  transition: color 110ms, border-color 110ms;
 }
 
 .launch-site:hover {
-  opacity: 0.82;
+  color: var(--shell-text);
+  border-color: var(--shell-line-hi);
 }
 
 .launch-kicker {
-  margin: 0;
-  font-size: 12px;
+  margin: 0 0 4px;
+  font-size: 11px;
   text-transform: uppercase;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.18em;
   color: var(--shell-muted);
 }
 
 .launch-title {
-  margin: 6px 0 8px;
-  font-size: clamp(34px, 7vw, 64px);
-  line-height: 0.94;
-  letter-spacing: 0.04em;
+  margin: 0 0 8px;
+  font-size: clamp(44px, 7vw, 78px);
+  line-height: 0.90;
+  letter-spacing: 0.03em;
   text-transform: uppercase;
   color: var(--shell-text);
   font-family: "Bebas Neue", sans-serif;
 }
 
 .launch-subtitle {
-  margin: 0 0 18px;
-  max-width: 70ch;
+  margin: 0 0 22px;
+  max-width: 66ch;
   font-size: 14px;
+  line-height: 1.6;
   color: var(--shell-muted);
 }
 
+/* ── Wallet Picker ── */
 .wallet-picker-head {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin: 8px 0;
-  font-size: 13px;
+  margin-bottom: 10px;
+  padding-top: 18px;
+  border-top: 1px solid var(--shell-line);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
   color: var(--shell-muted);
 }
 
 .wallet-picker {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
 }
 
 .wallet-choice {
   border: 1px solid var(--shell-line);
-  background: rgba(127, 127, 127, 0.08);
+  background: transparent;
   color: var(--shell-text);
   text-align: left;
-  padding: 12px;
+  padding: 12px 14px;
   cursor: pointer;
   font-family: inherit;
+  transition: border-color 110ms, background 110ms;
 }
 
-.wallet-choice:hover {
-  border-color: var(--shell-text);
-}
+.wallet-choice:hover { border-color: var(--shell-line-hi); }
 
 .wallet-choice.active {
   border-color: var(--shell-text);
-  background: rgba(127, 127, 127, 0.2);
+  background: color-mix(in srgb, var(--shell-btn) 70%, var(--shell-text) 10%);
 }
 
 .wallet-choice-name {
   font-size: 14px;
+  font-weight: 600;
   display: block;
+  margin-bottom: 3px;
 }
 
 .wallet-choice-tag {
@@ -189,7 +225,9 @@ body {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
-  margin-top: 16px;
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid var(--shell-line);
 }
 
 .launch-status {
@@ -199,13 +237,17 @@ body {
   color: var(--shell-muted);
 }
 
-body.prelaunch .wallet-bar,
-body.prelaunch .hud,
-body.prelaunch .help,
-body.prelaunch .quest-banner {
-  opacity: 0.2;
-  filter: grayscale(1);
-  pointer-events: none;
+/* ── Wallet Bar ──────────────────────────── */
+.wallet-bar {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 26;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 14px;
+  background: var(--shell-card);
+  border-bottom: 1px solid var(--shell-line);
 }
 
 .wallet-status {
@@ -216,24 +258,22 @@ body.prelaunch .quest-banner {
   text-overflow: ellipsis;
 }
 
+/* ── HUD ─────────────────────────────────── */
 .hud {
   position: fixed;
-  top: 44px;
-  left: 0;
-  right: 0;
+  top: 36px; left: 0; right: 0;
   z-index: 20;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px 16px;
-  background: color-mix(in srgb, var(--shell-card) 88%, transparent);
+  padding: 7px 14px;
+  background: var(--shell-card);
   border-bottom: 1px solid var(--shell-line);
-  backdrop-filter: blur(6px);
 }
 
 .brand {
-  font-size: 18px;
-  letter-spacing: 0.08em;
+  font-size: 17px;
+  letter-spacing: 0.09em;
   text-transform: uppercase;
   color: var(--shell-text);
   font-family: "Bebas Neue", sans-serif;
@@ -241,105 +281,83 @@ body.prelaunch .quest-banner {
 
 .stats {
   display: flex;
-  gap: 18px;
-  font-size: 13px;
+  flex-wrap: wrap;
+  gap: 16px;
+  font-size: 12px;
   color: var(--shell-muted);
 }
 
+/* ── Help ── */
 .help {
   position: fixed;
-  left: 16px;
-  bottom: 16px;
+  left: 16px; bottom: 16px;
   z-index: 20;
-  max-width: min(560px, 92vw);
-  font-size: 12px;
-  line-height: 1.5;
+  max-width: min(540px, 92vw);
+  font-size: 11px;
+  line-height: 1.55;
   color: var(--shell-muted);
-  padding: 10px 12px;
+  padding: 8px 12px;
   border: 1px solid var(--shell-line);
-  background: color-mix(in srgb, var(--shell-card) 88%, transparent);
+  background: var(--shell-card);
 }
 
-.help a {
-  color: var(--shell-text);
-  margin-left: 12px;
-  text-decoration: none;
-}
+.help a { color: var(--shell-text); margin-left: 10px; text-decoration: none; }
+.help a:hover { text-decoration: underline; }
 
-.help a:hover {
-  text-decoration: underline;
-}
-
+/* ── Quest Banner ── */
 .quest-banner {
   position: fixed;
   left: 50%;
-  top: 102px;
+  top: 84px;
   transform: translateX(-50%);
   z-index: 20;
-  background: color-mix(in srgb, var(--shell-card) 90%, transparent);
+  background: var(--shell-card);
   border: 1px solid var(--shell-line);
   color: var(--shell-text);
-  padding: 8px 12px;
+  padding: 5px 14px;
   font-size: 12px;
   max-width: min(820px, 95vw);
   text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: 0.04em;
 }
 
-.hidden {
-  display: none !important;
-}
-
+/* ── Dialogue ──────────────────────────── */
 .dialogue {
   position: fixed;
-  left: 50%;
-  bottom: 78px;
+  left: 50%; bottom: 72px;
   transform: translateX(-50%);
   width: min(620px, 95vw);
   z-index: 25;
-  background: color-mix(in srgb, var(--shell-card) 88%, transparent);
-  border: 1px solid var(--shell-line);
-  padding: 14px;
+  background: var(--shell-card);
+  border: 1px solid var(--shell-line-hi);
+  padding: 16px 18px;
 }
 
 .dialogue-name {
-  font-size: 14px;
+  font-size: 12px;
+  font-weight: 700;
   color: var(--shell-text);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
   margin-bottom: 8px;
-  letter-spacing: 0.06em;
 }
 
 .dialogue-text {
   font-size: 13px;
   color: var(--shell-text);
-  line-height: 1.5;
+  line-height: 1.58;
 }
 
-.dialogue-actions {
-  margin-top: 10px;
-}
+.dialogue-actions { margin-top: 12px; }
 
-.btn {
-  background: var(--shell-btn);
-  color: var(--shell-text);
-  border: 1px solid var(--shell-line);
-  padding: 8px 12px;
-  font-family: inherit;
-  cursor: pointer;
-}
-
-.btn.alt {
-  background: var(--shell-btn-alt);
-}
-
-.btn:hover {
-  filter: brightness(1.12);
-}
-
+/* ── Battle ──────────────────────────────── */
 .battle {
-  position: fixed;
-  inset: 0;
+  position: fixed; inset: 0;
   z-index: 30;
-  background: rgba(3, 7, 9, 0.78);
+  background: rgba(2, 4, 6, 0.88);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -348,87 +366,76 @@ body.prelaunch .quest-banner {
 
 .battle-card {
   width: min(760px, 97vw);
-  background: rgba(6, 13, 16, 0.96);
-  border: 1px solid var(--line);
-  padding: 16px;
+  background: #080c10;
+  border: 1px solid rgba(200, 214, 224, 0.2);
+  padding: 20px;
 }
 
 .battle-head {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 10px;
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(200, 214, 224, 0.1);
 }
 
 .battle-enemy-name {
-  font-size: 18px;
-  color: var(--accent);
-  letter-spacing: 0.05em;
+  font-size: 22px;
+  color: #edf0f3;
+  font-family: "Bebas Neue", sans-serif;
+  letter-spacing: 0.06em;
 }
 
 .battle-round {
-  font-size: 12px;
-  color: var(--muted);
+  font-size: 10px;
+  color: #6a7880;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
 }
 
-.battle-bars {
-  display: grid;
-  gap: 8px;
-  margin-bottom: 12px;
-}
+.battle-bars  { display: grid; gap: 8px; margin-bottom: 14px; }
 
 .battle-row {
   display: grid;
   grid-template-columns: 90px 1fr;
   align-items: center;
   gap: 10px;
-  font-size: 12px;
+  font-size: 11px;
+  color: #7a8890;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
 .bar {
-  background: #1a1a1a;
-  height: 12px;
-  border: 1px solid #5a5a5a;
+  background: #0a0e12;
+  height: 10px;
+  border: 1px solid rgba(200, 214, 224, 0.18);
 }
 
-.fill {
-  height: 100%;
-  width: 100%;
-  transition: width 180ms ease;
-}
-
-.fill.hero {
-  background: linear-gradient(90deg, #f3f3f3, #cccccc);
-}
-
-.fill.enemy {
-  background: linear-gradient(90deg, #c3c3c3, #8d8d8d);
-}
+.fill { height: 100%; width: 100%; transition: width 200ms ease; }
+.fill.hero  { background: #bcc8d0; }
+.fill.enemy { background: #7a8890; }
 
 .battle-log {
-  background: #111111;
-  border: 1px solid #555555;
-  min-height: 130px;
-  max-height: 190px;
-  overflow: auto;
-  padding: 10px;
+  background: #060910;
+  border: 1px solid rgba(200, 214, 224, 0.12);
+  min-height: 120px;
+  max-height: 180px;
+  overflow-y: auto;
+  padding: 10px 12px;
   font-size: 12px;
-  line-height: 1.45;
-  color: #dddddd;
+  line-height: 1.52;
+  color: #b8c4cc;
 }
 
-.battle-actions {
-  margin-top: 12px;
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
+.battle-actions { margin-top: 14px; display: flex; gap: 8px; flex-wrap: wrap; }
 
+/* ── Panels (Inventory / Shop) ──────────── */
 .panel {
-  position: fixed;
-  inset: 0;
+  position: fixed; inset: 0;
   z-index: 34;
-  background: rgba(3, 7, 9, 0.75);
+  background: rgba(2, 4, 6, 0.82);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -439,22 +446,25 @@ body.prelaunch .quest-banner {
   width: min(820px, 97vw);
   max-height: 90vh;
   overflow: auto;
-  border: 1px solid var(--line);
-  background: rgba(6, 14, 17, 0.97);
-  padding: 14px;
+  border: 1px solid rgba(200, 214, 224, 0.2);
+  background: #080c10;
+  padding: 20px;
 }
 
 .panel-head {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(200, 214, 224, 0.1);
+  font-family: "Bebas Neue", sans-serif;
+  font-size: 18px;
+  letter-spacing: 0.06em;
+  color: #edf0f3;
 }
 
-.panel-body {
-  display: grid;
-  gap: 8px;
-}
+.panel-body { display: grid; gap: 6px; }
 
 .panel-row {
   display: flex;
@@ -462,54 +472,27 @@ body.prelaunch .quest-banner {
   align-items: center;
   gap: 10px;
   font-size: 12px;
-  padding: 9px 10px;
-  border: 1px solid #4f4f4f;
-  background: #141414;
+  padding: 9px 12px;
+  border: 1px solid rgba(200, 214, 224, 0.1);
+  background: #0e1318;
+  color: #c0c8d0;
 }
 
-.panel-actions {
-  margin-top: 12px;
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
+.panel-actions { margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap; }
 
 .panel-status {
   margin-top: 8px;
-  color: #c3c3c3;
   font-size: 12px;
+  color: #6a7880;
 }
 
+/* ── Responsive ── */
 @media (max-width: 720px) {
-  .launch-card {
-    padding: 16px;
-  }
-
-  .launch-title {
-    font-size: clamp(30px, 13vw, 48px);
-  }
-
-  .wallet-bar {
-    flex-wrap: wrap;
-  }
-
-  .hud {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 4px;
-  }
-
-  .stats {
-    flex-wrap: wrap;
-    gap: 10px;
-  }
-
-  .quest-banner {
-    top: 128px;
-    font-size: 11px;
-  }
-
-  .battle-row {
-    grid-template-columns: 66px 1fr;
-  }
+  .launch-card    { padding: 18px 22px; }
+  .launch-title   { font-size: clamp(34px, 13vw, 52px); }
+  .wallet-bar     { flex-wrap: wrap; }
+  .hud            { flex-direction: column; align-items: flex-start; gap: 4px; }
+  .stats          { gap: 10px; }
+  .quest-banner   { top: 120px; font-size: 11px; }
+  .battle-row     { grid-template-columns: 60px 1fr; }
 }
