@@ -1644,15 +1644,13 @@ class BattleScene extends Phaser.Scene {
 }
 
 async function hydrateDemoParty() {
-  // Pick one random Normie instantly (no network) so the game starts immediately.
-  const DEMO_IDS = [1, 7, 42, 100, 256, 420, 888, 1000, 1337, 2000, 3000, 3333, 4000, 5000, 6000];
-  const randomId = DEMO_IDS[Math.floor(Math.random() * DEMO_IDS.length)];
+  const DEMO_ID = 6793;
   let normie;
   setLaunchStatus('Loading your Normie...');
   try {
-    normie = await fetchNormieFull(randomId);
+    normie = await fetchNormieFull(DEMO_ID);
   } catch {
-    normie = makeDemoNormie(randomId);
+    normie = makeDemoNormie(DEMO_ID);
   }
   STATE.party.roster = [normie];
   STATE.party.leadId = normie.id;
