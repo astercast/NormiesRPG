@@ -15,23 +15,24 @@
   <!-- LAUNCH SCREEN -->
   <div id="launch-overlay" class="launch-overlay">
     <div class="launch-card">
-      <p class="launch-eyebrow">NORMIES RPG</p>
-      <h1 class="launch-title">YOUR NORMIE.<br>YOUR ADVENTURE.</h1>
+      <h1 class="launch-title">NORMIES</h1>
+      <p class="launch-sub">Your NFT. Your adventure.</p>
 
-      <div id="wallet-picker" class="wallet-picker"></div>
+      <div class="launch-actions">
+        <button id="btn-launch-demo" class="btn-cta btn-cta-primary">
+          Play Free
+        </button>
+        <button id="btn-launch-wallet" class="btn-cta btn-cta-ghost" disabled>
+          Connect Wallet
+        </button>
+      </div>
 
-      <button id="btn-launch-wallet" class="btn-cta btn-cta-primary" disabled>
-        Connect Wallet
-      </button>
+      <p id="launch-status" class="launch-note"></p>
 
-      <div class="or-divider"><span>or</span></div>
+      <!-- Hidden wallet picker — populated by JS for wallet flow -->
+      <div id="wallet-picker" class="launch-hidden"></div>
 
-      <button id="btn-launch-demo" class="btn-cta btn-cta-ghost">
-        Play Demo &mdash; No Wallet Needed
-      </button>
-
-      <p id="launch-status" class="launch-note">Read-only &middot; no signing &middot; uses real Normies</p>
-
+      <!-- Normie selector shown after wallet connects -->
       <div id="normie-select-screen" class="hidden">
         <p id="normie-select-status" class="launch-eyebrow" style="margin-top:24px">Choose your Normie</p>
         <div id="normie-select-grid" class="normie-select-grid"></div>

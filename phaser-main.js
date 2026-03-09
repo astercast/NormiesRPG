@@ -385,7 +385,7 @@ function toggleUiTheme() {
 
 function initUiTheme() {
   const saved = localStorage.getItem('normies-ui-theme');
-  applyUiTheme(saved || 'dark');
+  applyUiTheme(saved || 'light');
 }
 
 function walletErrorMessage(err) {
@@ -1581,8 +1581,9 @@ class OverworldScene extends Phaser.Scene {
         else this.player.anims.play(vy < 0 ? 'player-up' : 'player-down', true);
       } else this.player.anims.stop();
     } else {
-      // Normie avatar is 80×80 canvas — base scale 0.9, gentle bob when moving
-      const pulse = (vx !== 0 || vy !== 0) ? (0.87 + Math.sin(this.time.now / 60) * 0.03) : 0.9;
+      // Normie avatar is 120×120 canvas — correct base scale is 0.32 (set in refreshLeadAvatar)
+      const base = this.player.texture.key === LEAD_NORMIE_TEXTURE_KEY ? 0.32 : 0.9;
+      const pulse = (vx !== 0 || vy !== 0) ? (base * (0.97 + Math.sin(this.time.now / 60) * 0.03)) : base;
       this.player.setScale(pulse);
 
       // Direction-aware flip for normie.

@@ -112,17 +112,17 @@ body.prelaunch .mobile-btns {
   position: fixed;
   inset: 0;
   z-index: 80;
-  background: #0a0a09;
+  background: var(--bg);
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
 .launch-card {
-  width: min(400px, calc(100vw - 32px));
-  padding: 48px 32px 40px;
-  background: #131312;
-  border: 1px solid rgba(255,255,255,0.09);
+  width: min(360px, calc(100vw - 32px));
+  padding: 52px 32px 44px;
+  background: var(--surface);
+  border: 1px solid var(--border);
   text-align: center;
 }
 
@@ -136,10 +136,26 @@ body.prelaunch .mobile-btns {
 
 .launch-title {
   font-family: var(--font-brand);
-  font-size: clamp(42px, 11vw, 76px);
+  font-size: clamp(54px, 14vw, 92px);
   line-height: 0.9;
-  color: #ffffff;
+  color: var(--text);
+  margin-bottom: 8px;
+  letter-spacing: 0.04em;
+}
+
+.launch-sub {
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
   margin-bottom: 36px;
+}
+
+.launch-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
 }
 
 /* wallet choices */
@@ -193,17 +209,16 @@ body.prelaunch .mobile-btns {
 .btn-cta:not(:disabled):hover  { opacity: 0.80; }
 
 .btn-cta-primary {
-  background: #ffffff;
-  color: #0a0a09;
-  border: 2px solid #ffffff;
-  margin-bottom: 4px;
+  background: var(--text);
+  color: var(--bg);
+  border: 2px solid var(--text);
 }
 .btn-cta-ghost {
   background: transparent;
-  color: #555552;
-  border: 1px solid #222220;
+  color: var(--muted);
+  border: 1px solid var(--border);
 }
-.btn-cta-ghost:not(:disabled):hover { color: #aaaaaa; border-color: #444; }
+.btn-cta-ghost:not(:disabled):hover { color: var(--text); border-color: var(--border-hi); }
 
 .or-divider {
   display: flex;
@@ -1229,8 +1244,8 @@ body.prelaunch .mobile-btns {
     0deg,
     transparent,
     transparent 2px,
-    rgba(0,0,0,0.07) 2px,
-    rgba(0,0,0,0.07) 4px
+    rgba(0,0,0,0.03) 2px,
+    rgba(0,0,0,0.03) 4px
   );
   pointer-events: none;
   z-index: 1;
