@@ -129,17 +129,49 @@
   <!-- INVENTORY PANEL -->
   <div id="menu" class="panel hidden">
     <div class="panel-sheet">
+
+      <!-- Header -->
       <div class="panel-header">
-        <span class="panel-title">Inventory</span>
+        <span class="panel-title">BAG</span>
         <button id="menu-close" class="panel-close">&times;</button>
       </div>
-      <div id="menu-body" class="panel-section"></div>
-      <div id="party-body" class="panel-section"></div>
+
+      <!-- Tab bar -->
+      <div class="inv-tabs" role="tablist">
+        <button class="inv-tab active" id="tab-gear"  data-tab="gear"  role="tab" aria-selected="true">GEAR</button>
+        <button class="inv-tab"        id="tab-party" data-tab="party" role="tab" aria-selected="false">PARTY</button>
+        <button class="inv-tab"        id="tab-stats" data-tab="stats" role="tab" aria-selected="false">STATS</button>
+      </div>
+
+      <!-- GEAR tab -->
+      <div id="tab-pane-gear" class="inv-pane">
+        <!-- equipped slots (3 fixed rows rendered by JS) -->
+        <p class="inv-section-label">EQUIPPED</p>
+        <div id="equip-slots" class="equip-slots"></div>
+
+        <p class="inv-section-label" style="margin-top:14px">BACKPACK</p>
+        <div id="menu-body" class="inv-list panel-section"></div>
+      </div>
+
+      <!-- PARTY tab -->
+      <div id="tab-pane-party" class="inv-pane hidden">
+        <p class="inv-section-label">PARTY</p>
+        <div id="party-body" class="inv-list panel-section"></div>
+      </div>
+
+      <!-- STATS tab -->
+      <div id="tab-pane-stats" class="inv-pane hidden">
+        <p class="inv-section-label">CHARACTER</p>
+        <div id="stats-body" class="inv-stats-grid"></div>
+      </div>
+
+      <!-- Footer -->
       <div class="panel-footer">
         <button id="btn-save-cloud" class="btn-pill">&#9729; Save</button>
         <button id="btn-load-cloud" class="btn-pill btn-pill-ghost">&#9729; Load</button>
         <span id="save-status" class="save-status-label">idle</span>
       </div>
+
     </div>
   </div>
 

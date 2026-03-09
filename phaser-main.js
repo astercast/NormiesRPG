@@ -153,6 +153,8 @@ const ui = {
   menuBody: document.getElementById('menu-body'),
   partyBody: document.getElementById('party-body'),
   menuClose: document.getElementById('menu-close'),
+  equipSlots: document.getElementById('equip-slots'),
+  statsBody: document.getElementById('stats-body'),
   shop: document.getElementById('shop'),
   shopBody: document.getElementById('shop-body'),
   shopClose: document.getElementById('shop-close'),
@@ -160,6 +162,23 @@ const ui = {
   btnLoadCloud: document.getElementById('btn-load-cloud'),
   saveStatus: document.getElementById('save-status'),
 };
+
+// ── Tab wiring (runs once DOM is ready) ──────────────────────────
+(function wireMenuTabs() {
+  const tabs  = document.querySelectorAll('.inv-tab');
+  const panes = document.querySelectorAll('.inv-pane');
+  tabs.forEach((tab) => {
+    tab.addEventListener('click', () => {
+      tabs.forEach((t)  => { t.classList.remove('active'); t.setAttribute('aria-selected','false'); });
+      panes.forEach((p) => p.classList.add('hidden'));
+      tab.classList.add('active');
+      tab.setAttribute('aria-selected','true');
+      document.getElementById(`tab-pane-${tab.dataset.tab}`)?.classList.remove('hidden');
+      if (tab.dataset.tab === 'stats')  renderStatsTab();
+      if (tab.dataset.tab === 'party')  renderPartyMenu();
+    });
+  });
+})();
 
 let gameRef = null;
 let overworldRef = null;
@@ -500,18 +519,26 @@ function partyTintByType(type) {
 function renderPartyMenu() {
   const lead = leadNormie();
   const rows = [];
-  rows.push('<div class="panel-row"><span>Your party grows as you explore and complete quests.</span><span></span></div>');
 
   STATE.party.roster.forEach((n) => {
     const isLead = lead?.id === n.id;
-    const tag = isLead ? 'LEAD' : 'Companion';
-    rows.push(`<div class="panel-row"><span>${n.name} · ${n.type} · HP ${n.maxHp} · ATK ${n.atkBasic}</span><span><button class="btn alt" data-lead="${n.id}">${tag}</button></span></div>`);
+    const initial = (n.name || '#?').replace(/^Normie /,'').slice(0,3);
+    rows.push(`
+      <div class="party-card">
+        <div class="party-card-avatar">${initial}</div>
+        <div class="party-card-info">
+          <div class="party-card-name">${n.name}</div>
+          <div class="party-card-sub">${n.type} &nbsp;&middot;&nbsp; HP ${n.maxHp} &nbsp;&middot;&nbsp; ATK ${n.atkBasic}</div>
+        </div>
+        ${isLead
+          ? '<span class="party-card-badge">LEAD</span>'
+          : `<button class="party-set-lead" data-lead="${n.id}">Set Lead</button>`
+        }
+      </div>`);
   });
 
-  if (STATE.party.roster.length < 5) {
-    for (let i = STATE.party.roster.length; i < 5; i++) {
-      rows.push('<div class="panel-row" style="opacity:.38"><span>Empty slot — find a companion in the world</span><span></span></div>');
-    }
+  for (let i = STATE.party.roster.length; i < 5; i++) {
+    rows.push(`<div class="party-slot-empty">Slot ${i+1} &mdash; empty</div>`);
   }
 
   ui.partyBody.innerHTML = rows.join('');
@@ -529,40 +556,82 @@ function renderPartyMenu() {
   });
 }
 
-function renderInventoryMenu() {
+function renderStatsTab() {
   const p = STATE.player;
+  const expPct = Math.min((p.exp / p.expToLevel) * 100, 100).toFixed(1);
+  const blocks = [
+    { label: 'LEVEL',   val: p.level,        sub: `${p.exp} / ${p.expToLevel} EXP` },
+    { label: 'MAX HP',  val: maxHp(),         sub: `Base ${p.baseHp} + gear` },
+    { label: 'ATTACK',  val: atkValue(),      sub: `Base ${p.baseAtk} + gear` },
+    { label: 'SKILL',   val: skillValue(),    sub: `Base ${p.baseSkill} + gear` },
+    { label: 'GOLD',    val: p.gold,          sub: `Potions: ${p.potions}` },
+    { label: 'CRIT %',  val: `${Math.round(p.crit*100)}%`, sub: 'Natural crit rate' },
+  ];
+  const blockHtml = blocks.map(b => `
+    <div class="stat-block">
+      <div class="stat-block-label">${b.label}</div>
+      <div class="stat-block-val">${b.val}</div>
+      <div class="stat-block-sub">${b.sub}</div>
+    </div>`).join('');
+  const expBar = `
+    <div class="exp-bar-wrap">
+      <div class="exp-bar-header"><span>EXPERIENCE</span><span>${p.exp} / ${p.expToLevel}</span></div>
+      <div class="exp-bar-track"><div class="exp-bar-fill" style="width:${expPct}%"></div></div>
+    </div>`;
+  if (ui.statsBody) ui.statsBody.innerHTML = blockHtml + expBar;
+}
+
+function renderInventoryMenu() {
+  const p  = STATE.player;
   const eq = p.equipment;
+
+  // ── Equipped slots ──────────────────────────────────────────
+  const SLOT_ICONS = { weapon: '&#9876;', armor: '&#9673;', relic: '&#10022;' };
+  const slotHtml = ['weapon','armor','relic'].map((slot) => {
+    const item = itemById(eq[slot]);
+    const isEmpty = !item;
+    return `
+      <div class="equip-slot${isEmpty ? ' equip-slot-empty' : ''}">
+        <span class="equip-slot-type">${SLOT_ICONS[slot]} ${slot}</span>
+        <span class="equip-slot-name">${item ? item.name : 'Empty'}</span>
+        <span class="equip-slot-stats">${item ? `ATK+${item.atk||0} HP+${item.hp||0}` : '–'}</span>
+      </div>`;
+  }).join('');
+  if (ui.equipSlots) ui.equipSlots.innerHTML = slotHtml;
+
+  // ── Backpack ───────────────────────────────────────────────
   const body = [];
 
-  body.push(`<div class="panel-row"><span>Level ${p.level} · EXP ${p.exp}/${p.expToLevel}</span><span>ATK ${atkValue()} · SKILL ${skillValue()} · HP ${maxHp()}</span></div>`);
-  body.push(`<div class="panel-row"><span>Potions</span><span>${p.potions}</span></div>`);
-
-  ['weapon', 'armor', 'relic'].forEach((slot) => {
-    const current = itemById(eq[slot]);
-    body.push(`<div class="panel-row"><span>${slot.toUpperCase()}</span><span>${current ? current.name : 'None'}</span></div>`);
-  });
-
-  p.inventoryGear.forEach((id, idx) => {
-    const it = itemById(id);
-    if (!it) return;
-    body.push(`<div class="panel-row"><span>${it.name}</span><span><button class="btn alt" data-equip="${idx}">Equip</button></span></div>`);
-  });
-
-  if (!p.inventoryGear.length) body.push('<div class="panel-row"><span>No spare gear yet. Loot and shop upgrades appear quickly now.</span><span></span></div>');
+  if (!p.inventoryGear.length) {
+    body.push('<div class="inv-empty">Backpack empty &mdash; loot drops after battles.</div>');
+  } else {
+    p.inventoryGear.forEach((id, idx) => {
+      const it = itemById(id);
+      if (!it) return;
+      const sub = `${it.slot?.toUpperCase() || 'ITEM'} &nbsp;&middot;&nbsp; ATK+${it.atk||0} HP+${it.hp||0} SKL+${it.skill||0}`;
+      body.push(`
+        <div class="inv-row">
+          <div class="inv-row-icon">${SLOT_ICONS[it.slot] || '&#9670;'}</div>
+          <div class="inv-row-info">
+            <div class="inv-row-name">${it.name}</div>
+            <div class="inv-row-sub">${sub}</div>
+          </div>
+          <button class="inv-row-action" data-equip="${idx}">Equip</button>
+        </div>`);
+    });
+  }
 
   ui.menuBody.innerHTML = body.join('');
   ui.menuBody.querySelectorAll('[data-equip]').forEach((btn) => {
     btn.addEventListener('click', () => {
-      const idx = Number(btn.dataset.equip);
-      const id = STATE.player.inventoryGear[idx];
+      const idx  = Number(btn.dataset.equip);
+      const id   = STATE.player.inventoryGear[idx];
       const item = itemById(id);
       if (!item?.slot) return;
-
       const old = STATE.player.equipment[item.slot];
       STATE.player.equipment[item.slot] = id;
       STATE.player.inventoryGear.splice(idx, 1);
       if (old) STATE.player.inventoryGear.push(old);
-
       STATE.player.hp = clamp(STATE.player.hp, 1, maxHp());
       updateHud();
       renderInventoryMenu();
@@ -572,6 +641,14 @@ function renderInventoryMenu() {
 
 function openMenu() {
   menuOpen = true;
+  // Reset to gear tab each open
+  document.querySelectorAll('.inv-tab').forEach((t) => { t.classList.remove('active'); t.setAttribute('aria-selected','false'); });
+  document.querySelectorAll('.inv-pane').forEach((p) => p.classList.add('hidden'));
+  const gearTab  = document.getElementById('tab-gear');
+  const gearPane = document.getElementById('tab-pane-gear');
+  if (gearTab)  { gearTab.classList.add('active');    gearTab.setAttribute('aria-selected','true'); }
+  if (gearPane) gearPane.classList.remove('hidden');
+
   ui.menu.classList.remove('hidden');
   setOverlayLock(true);
   renderInventoryMenu();
@@ -606,14 +683,32 @@ function buyItem(itemId) {
 
 function renderShop() {
   const body = [];
-  body.push(`<div class="panel-row"><span>Your Gold</span><span>${STATE.player.gold}</span></div>`);
+  const SHOP_ICONS = { weapon:'&#9876;', armor:'&#9673;', relic:'&#10022;', consumable:'&#10084;' };
+
+  body.push(`
+    <div class="shop-gold-bar">
+      <span>Your Gold</span>
+      <strong>${STATE.player.gold}G</strong>
+    </div>`);
 
   SHOP_STOCK.forEach((id) => {
     const item = itemById(id);
     const stats = item.kind === 'consumable'
       ? `Heal ${Math.floor(item.healPct * 100)}%`
-      : `+${item.atk || 0} ATK +${item.hp || 0} HP +${item.skill || 0} SKILL`;
-    body.push(`<div class="panel-row"><span>${item.name} (${stats})</span><span><button class="btn" data-buy="${id}">${item.price}G</button></span></div>`);
+      : `ATK+${item.atk||0} HP+${item.hp||0} SKL+${item.skill||0}`;
+    const icon = SHOP_ICONS[item.kind] || SHOP_ICONS[item.slot] || '&#9670;';
+    body.push(`
+      <div class="shop-row">
+        <div class="shop-row-icon">${icon}</div>
+        <div class="shop-row-info">
+          <div class="shop-row-name">${item.name}</div>
+          <div class="shop-row-sub">${item.kind?.toUpperCase() || item.slot?.toUpperCase()} &nbsp;&middot;&nbsp; ${stats}</div>
+        </div>
+        <div class="shop-row-price">
+          <span class="shop-gold-tag">${item.price}G</span>
+          <button class="shop-buy-btn" data-buy="${id}">Buy</button>
+        </div>
+      </div>`);
   });
 
   ui.shopBody.innerHTML = body.join('');
@@ -1101,7 +1196,10 @@ class OverworldScene extends Phaser.Scene {
     this._touchActive = false;
     this._touchOrig = { x: 0, y: 0 };
     this.input.on('pointerdown', (p) => {
-      if (p.x < this.scale.width * 0.65) {
+      // Only activate swipe-move if the D-pad is NOT already handling movement
+      const dp = window._dpadState || {};
+      const dpadActive = dp.up || dp.down || dp.left || dp.right;
+      if (!dpadActive && p.x < this.scale.width * 0.65) {
         this._touchActive = true;
         this._touchOrig = { x: p.x, y: p.y };
       }
@@ -1331,6 +1429,7 @@ class OverworldScene extends Phaser.Scene {
   startBattle(enemyBase, tier, isBoss) {
     this.overlayLocked = true;
     this.player.body.setVelocity(0, 0);
+    bus.emit('battle-start');
     this.scene.launch('BattleScene', { enemyBase, tier, isBoss });
     this.scene.pause();
   }
@@ -1684,20 +1783,71 @@ initUiTheme();
 renderWalletChoices();
 updateHud('Verdant Town');
 
-// D-pad mobile controls
+// D-pad mobile controls — container-based for reliable sliding, diagonals & multi-touch
 (function wireDpad() {
   const dpad = { up: false, down: false, left: false, right: false };
-  const set = (dir, val) => { dpad[dir] = val; };
-  const dirs = ['up','down','left','right'];
-  dirs.forEach((dir) => {
-    const el = document.getElementById(`dp-${dir}`);
-    if (!el) return;
-    el.addEventListener('pointerdown', (e) => { e.preventDefault(); set(dir, true); });
-    el.addEventListener('pointerup',   () => set(dir, false));
-    el.addEventListener('pointerleave',() => set(dir, false));
-  });
-  // Expose to overworld scene via global
   window._dpadState = dpad;
+
+  const container = document.querySelector('.dpad');
+  if (!container) return;
+
+  const BTN = {
+    up:    document.getElementById('dp-up'),
+    down:  document.getElementById('dp-down'),
+    left:  document.getElementById('dp-left'),
+    right: document.getElementById('dp-right'),
+  };
+
+  function clearAll() {
+    dpad.up = dpad.down = dpad.left = dpad.right = false;
+    Object.values(BTN).forEach((b) => b?.classList.remove('active'));
+  }
+
+  function updateFromEvent(e) {
+    const rect = container.getBoundingClientRect();
+    const cx   = rect.left + rect.width  / 2;
+    const cy   = rect.top  + rect.height / 2;
+    const dx   = e.clientX - cx;
+    const dy   = e.clientY - cy;
+    const DEAD = 10; // px dead-zone at centre
+
+    clearAll();
+    if (Math.abs(dx) < DEAD && Math.abs(dy) < DEAD) return;
+
+    // Diagonals: a direction is active when its component is >= 50% of the other.
+    if (Math.abs(dy) >= Math.abs(dx) * 0.5) {
+      if (dy < -DEAD) { dpad.up   = true; BTN.up?.classList.add('active');   }
+      if (dy >  DEAD) { dpad.down = true; BTN.down?.classList.add('active'); }
+    }
+    if (Math.abs(dx) >= Math.abs(dy) * 0.5) {
+      if (dx < -DEAD) { dpad.left  = true; BTN.left?.classList.add('active');  }
+      if (dx >  DEAD) { dpad.right = true; BTN.right?.classList.add('active'); }
+    }
+  }
+
+  container.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    // Release any implicit capture from the child <button>, then re-capture on container
+    if (e.target !== container) {
+      try { e.target.releasePointerCapture(e.pointerId); } catch (_) {}
+    }
+    container.setPointerCapture(e.pointerId);
+    updateFromEvent(e);
+  });
+
+  container.addEventListener('pointermove', (e) => {
+    if (!(e.buttons & 1)) return; // only while primary finger/button is down
+    updateFromEvent(e);
+  });
+
+  container.addEventListener('pointerup',     () => clearAll());
+  container.addEventListener('pointercancel', () => clearAll());
+  container.addEventListener('contextmenu',   (e) => e.preventDefault());
+
+  // Hide D-pad during battle to keep the canvas uncluttered
+  const mBtns = document.getElementById('mobile-btns');
+  bus.on('battle-start',    () => { clearAll(); mBtns?.classList.add('d-hidden');    });
+  bus.on('battle-finished', () => {             mBtns?.classList.remove('d-hidden'); });
 })();
 
 // Mobile action buttons
