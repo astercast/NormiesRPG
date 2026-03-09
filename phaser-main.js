@@ -196,26 +196,32 @@ function buildLeadNormieTexture() {
   const px = lead?.pixels || '';
   if (!px || px.length < 1600) return false;
 
-  const size = 40;
+  // Draw the 40×40 normie bitmap at 2px per pixel → 80×80 canvas.
+  // Only the dark ('1') pixels are drawn; background stays transparent.
+  const S = 2;
   const cv = document.createElement('canvas');
-  cv.width = size;
-  cv.height = size;
+  cv.width = 40 * S;
+  cv.height = 40 * S;
   const ctx = cv.getContext('2d');
-  ctx.clearRect(0, 0, size, size);
-  ctx.fillStyle = '#000000';
-
-  // Keep only dark pixels from the Normie bitmap.
-  for (let y = 0; y < size; y += 1) {
-    for (let x = 0; x < size; x += 1) {
-      const i = y * size + x;
-      if (px[i] === '1') ctx.fillRect(x, y, 1, 1);
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  ctx.fillStyle = '#111110';
+  for (let y = 0; y < 40; y += 1) {
+    for (let x = 0; x < 40; x += 1) {
+      if (px[y * 40 + x] === '1') ctx.fillRect(x * S, y * S, S, S);
     }
   }
 
-  if (gameRef.textures.exists(LEAD_NORMIE_TEXTURE_KEY)) {
-    gameRef.textures.remove(LEAD_NORMIE_TEXTURE_KEY);
-  }
-  gameRef.textures.addCanvas(LEAD_NORMIE_TEXTURE_KEY, cv);
+  // Use HTMLImageElement + onload so the WebGL glTexture is always ready.
+  const img = new Image();
+  img.onload = () => {
+    if (!gameRef) return;
+    if (gameRef.textures.exists(LEAD_NORMIE_TEXTURE_KEY)) {
+      gameRef.textures.remove(LEAD_NORMIE_TEXTURE_KEY);
+    }
+    gameRef.textures.addImage(LEAD_NORMIE_TEXTURE_KEY, img);
+    if (overworldRef) overworldRef.refreshLeadAvatar();
+  };
+  img.src = cv.toDataURL();
   return true;
 }
 
@@ -871,9 +877,8 @@ class BootScene extends Phaser.Scene {
 
   preload() {
     // Maps are defined inline in MAP_DEFS — no JSON files to load.
-    // Load procedural art as data-URLs — goes through Phaser's full image
-    // pipeline, which guarantees correct WebGL texture upload on all GPUs.
-    this.load.image(ART_KEYS.tiles, buildTileCanvas().toDataURL());
+    // Load the real Kenney 1-bit monochrome tileset (48 cols × 22 rows, 16×16 px each).
+    this.load.image(ART_KEYS.tiles, 'assets/art/tileset/kenney_mono_packed.png');
     this.load.spritesheet(ART_KEYS.player, buildPlayerCanvas().toDataURL(), { frameWidth: 32, frameHeight: 32 });
     this.load.spritesheet(ART_KEYS.npc,    buildNpcCanvas().toDataURL(),    { frameWidth: 32, frameHeight: 32 });
     this.load.spritesheet(ART_KEYS.enemy,  buildEnemyCanvas().toDataURL(),  { frameWidth: 32, frameHeight: 32 });
@@ -968,9 +973,11 @@ class OverworldScene extends Phaser.Scene {
     const key = leadAvatarKey();
     this.player.setTexture(key, 0);
     if (key === LEAD_NORMIE_TEXTURE_KEY) {
-      this.player.setScale(1.65);
-      this.player.body.setSize(20, 20).setOffset(10, 10);
+      // Normie canvas is 80×80 — display at 0.9 scale = 72px on screen (~2.25 world tiles)
+      this.player.setScale(0.9);
+      this.player.body.setSize(44, 50).setOffset(18, 22);
       this.player.clearTint();
+      this.player.rotation = 0;
     } else {
       this.player.setScale(2);
       this.player.body.setSize(16, 12).setOffset(8, 18);
@@ -1001,44 +1008,46 @@ class OverworldScene extends Phaser.Scene {
     const mdef = MAP_DEFS[mapId];
     if (!mdef) { console.error('[NormiesRPG] Unknown map:', mapId); return; }
 
-    // Build tilemap from inline data — no JSON file dependency.
-    this.map = this.make.tilemap({ data: mdef.ground, tileWidth: 32, tileHeight: 32 });
-    this.tileset = this.map.addTilesetImage(ART_KEYS.tiles, undefined, 32, 32);
+    // Build tilemap from inline data — Kenney mono tileset is 16×16 px per tile.
+    // Scale 2 renders each tile at 32×32 px in world space.
+    this.map = this.make.tilemap({ data: mdef.ground, tileWidth: 16, tileHeight: 16 });
+    this.tileset = this.map.addTilesetImage(ART_KEYS.tiles, undefined, 16, 16);
     if (!this.tileset) {
       console.error('[NormiesRPG] addTilesetImage returned null — texture key:', ART_KEYS.tiles);
       return;
     }
 
     this.groundLayer = this.map.createLayer(0, this.tileset, 0, 0).setScale(2);
-    this.collisionLayer = null; // single-layer approach; walls use tile index 3
+    this.collisionLayer = null; // single-layer; border tiles (index 3) handle collision
     this.groundLayer.setCollisionBetween(3, 3);
     this.physics.add.collider(this.player, this.groundLayer);
 
-    const mapW = mdef.w * 32 * 2;
-    const mapH = mdef.h * 32 * 2;
+    // World size: tile 16px × scale 2 = 32 world-px per tile
+    const mapW = mdef.w * 32;
+    const mapH = mdef.h * 32;
     this.physics.world.setBounds(0, 0, mapW, mapH);
     this.cameras.main.setBounds(0, 0, mapW, mapH);
 
     const spawnData = mdef.spawn[spawnName] || Object.values(mdef.spawn)[0];
-    if (spawnData) this.player.setPosition((spawnData.col * 32 + 16) * 2, (spawnData.row * 32 + 16) * 2);
+    if (spawnData) this.player.setPosition(spawnData.col * 32 + 16, spawnData.row * 32 + 16);
 
     mdef.npcs.forEach(({ id, col, row }) => {
       const npcData = NPCS[id] || NPCS.elder;
-      const spr = this.add.sprite((col * 32 + 16) * 2, (row * 32 + 16) * 2, ART_KEYS.npc, 0).setScale(2).setDepth(9);
+      const spr = this.add.sprite(col * 32 + 16, row * 32 + 16, ART_KEYS.npc, 0).setScale(2).setDepth(9);
       spr.anims.play('npc-idle', true);
       this.npcs.push({ id, data: npcData, sprite: spr });
     });
 
     mdef.warps.forEach(({ col, row, cols, rows, targetMap, targetSpawn }) => {
-      this.warps.push({ rect: new Phaser.Geom.Rectangle(col * 64, row * 64, cols * 64, rows * 64), targetMap, targetSpawn });
+      this.warps.push({ rect: new Phaser.Geom.Rectangle(col * 32, row * 32, cols * 32, rows * 32), targetMap, targetSpawn });
     });
 
     mdef.encounters.forEach(({ col, row, cols, rows, chance, tier }) => {
-      this.encounters.push({ rect: new Phaser.Geom.Rectangle(col * 64, row * 64, cols * 64, rows * 64), chance, tier });
+      this.encounters.push({ rect: new Phaser.Geom.Rectangle(col * 32, row * 32, cols * 32, rows * 32), chance, tier });
     });
 
     mdef.bosses.forEach(({ col, row, cols, rows, bossId }) => {
-      this.bosses.push({ rect: new Phaser.Geom.Rectangle(col * 64, row * 64, cols * 64, rows * 64), bossId });
+      this.bosses.push({ rect: new Phaser.Geom.Rectangle(col * 32, row * 32, cols * 32, rows * 32), bossId });
     });
 
     STATE.world.mapId = mapId;
@@ -1071,16 +1080,13 @@ class OverworldScene extends Phaser.Scene {
         else this.player.anims.play(vy < 0 ? 'player-up' : 'player-down', true);
       } else this.player.anims.stop();
     } else {
-      const pulse = (vx !== 0 || vy !== 0) ? (1.62 + Math.sin(this.time.now / 60) * 0.05) : 1.65;
+      // Normie avatar is 80×80 canvas — base scale 0.9, gentle bob when moving
+      const pulse = (vx !== 0 || vy !== 0) ? (0.87 + Math.sin(this.time.now / 60) * 0.03) : 0.9;
       this.player.setScale(pulse);
 
-      // Direction-aware body language for static Normie pixel avatar.
+      // Direction-aware flip for normie.
       if (vx < -2) this.player.setFlipX(true);
       else if (vx > 2) this.player.setFlipX(false);
-
-      const targetTilt = clamp(vx * 0.0024, -0.14, 0.14);
-      this.player.rotation += (targetTilt - this.player.rotation) * 0.18;
-      if (Math.abs(vx) < 1 && Math.abs(vy) < 1) this.player.rotation *= 0.78;
     }
 
     this.npcs.forEach((n) => {
