@@ -143,6 +143,8 @@ const ui = {
   battleHeroHp: document.getElementById('battle-hero-hp'),
   battleEnemyHp: document.getElementById('battle-enemy-hp'),
   battleLog: document.getElementById('battle-log'),
+  battleCard: document.querySelector('.battle-card'),
+  toastContainer: document.getElementById('toast-container'),
   btnAttack: document.getElementById('btn-attack'),
   btnSkill: document.getElementById('btn-skill'),
   btnPotion: document.getElementById('btn-potion'),
@@ -369,22 +371,45 @@ function exitLaunchOverlay() {
 }
 
 function updateHud(zone = null) {
-  if (zone) ui.zoneLabel.textContent = `Zone: ${zone}`;
+  if (zone) ui.zoneLabel.textContent = zone;
 
   const lead = leadNormie();
-  ui.leadLabel.textContent = `Lead: ${lead ? lead.name.replace(/^Normie /, '#') : 'Rookie'}`;
-  ui.goldLabel.textContent = `Gold: ${STATE.player.gold}`;
-  ui.hpLabel.textContent = `HP: ${Math.max(0, Math.floor(STATE.player.hp))}/${maxHp()}`;
-  ui.potionsLabel.textContent = `Potions: ${STATE.player.potions}`;
-  ui.eqLabel.textContent = `Gear: ${equippedBonus().label}`;
+  ui.leadLabel.textContent = lead ? lead.name.replace(/^Normie /, '#') : 'Rookie';
+  ui.goldLabel.textContent = String(STATE.player.gold);
+  const hp = Math.max(0, Math.floor(STATE.player.hp));
+  const mhp = maxHp();
+  ui.hpLabel.textContent = `${hp}/${mhp}`;
+  ui.potionsLabel.textContent = String(STATE.player.potions);
+  ui.eqLabel.textContent = equippedBonus().label;
   ui.questBanner.textContent = questText();
+  // HP color-coding
+  const hpPct = hp / mhp;
+  const hpStat = ui.hpLabel.closest?.('.hud-stat');
+  if (hpStat) hpStat.dataset.hpState = hpPct < 0.30 ? 'low' : hpPct < 0.60 ? 'mid' : 'high';
 }
 
 function addBattleLog(text) {
   const row = document.createElement('div');
   row.textContent = text;
+  if (/CRIT/i.test(text))                   row.classList.add('log-crit');
+  else if (/defeated|escaped|legend/i.test(text)) row.classList.add('log-win');
+  else if (/restores|heal/i.test(text))     row.classList.add('log-heal');
+  else if (/hits for|emerges/i.test(text))  row.classList.add('log-dmg');
   ui.battleLog.appendChild(row);
   ui.battleLog.scrollTop = ui.battleLog.scrollHeight;
+}
+
+function showToast(msg, type = 'info') {
+  if (!ui.toastContainer) return;
+  const el = document.createElement('div');
+  el.className = `toast toast-${type}`;
+  el.textContent = msg;
+  ui.toastContainer.appendChild(el);
+  const remove = () => {
+    el.classList.add('toast-out');
+    el.addEventListener('animationend', () => el.remove(), { once: true });
+  };
+  setTimeout(remove, 2600);
 }
 
 function setOverlayLock(locked) {
@@ -699,15 +724,19 @@ function grantVictory(data) {
     p.baseSkill += 3;
     p.potions += 1;
     p.hp = maxHp();
+    showToast(`LEVEL ${p.level}`, 'levelup');
     showDialogue('Level Up', `Lv.${p.level} reached. Build growth applied and +1 potion granted.`);
   }
 
   // Keep friction low: partial heal after each non-boss victory.
   if (!data.isBoss) p.hp = clamp(p.hp + Math.floor(maxHp() * 0.18), 1, maxHp());
 
+  showToast(`+${data.gold}G  +${data.exp} EXP`, 'reward');
+
   const drop = dropLootForTier(data.tier);
   if (drop) {
     addGearToInventory(drop);
+    showToast(itemById(drop).name, 'loot');
     showDialogue('Loot', `${itemById(drop).name} dropped. Open inventory (I) and equip it.`);
   }
 
@@ -1411,6 +1440,13 @@ class BattleScene extends Phaser.Scene {
     this.cameras.main.shake(130, crit ? 0.012 : 0.006);
     this.cameras.main.flash(90, 255, 255, 255, false);
     if (target === this.enemySprite) this.slashEmitter.emitParticleAt(target.x, target.y, crit ? 16 : 8);
+    // CSS hit-flash on battle card
+    if (ui.battleCard) {
+      ui.battleCard.classList.remove('hit-flash');
+      void ui.battleCard.offsetWidth; // force reflow to restart animation
+      ui.battleCard.classList.add('hit-flash');
+      ui.battleCard.addEventListener('animationend', () => ui.battleCard.classList.remove('hit-flash'), { once: true });
+    }
   }
 
   playerAction(type) {
