@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
   <title>Normies RPG</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -11,7 +11,173 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js"></script>
 </head>
 <body class="prelaunch">
+
+  <!-- ══ LAUNCH SCREEN ════════════════════════════════════════════ -->
   <div id="launch-overlay" class="launch-overlay">
+    <div class="launch-card">
+      <p class="launch-eyebrow">NORMIES RPG</p>
+      <h1 class="launch-title">YOUR NORMIE.<br>YOUR ADVENTURE.</h1>
+
+      <div id="wallet-picker" class="wallet-picker"></div>
+
+      <button id="btn-launch-wallet" class="btn-cta btn-cta-primary" disabled>
+        Connect Wallet
+      </button>
+
+      <div class="or-divider"><span>or</span></div>
+
+      <button id="btn-launch-demo" class="btn-cta btn-cta-ghost">
+        Play Demo &mdash; No Wallet Needed
+      </button>
+
+      <p id="launch-status" class="launch-note">Read-only &middot; no signing &middot; uses real Normies</p>
+
+      <div id="normie-select-screen" class="hidden">
+        <p id="normie-select-status" class="launch-eyebrow" style="margin-top:24px">Choose your Normie</p>
+        <div id="normie-select-grid" class="normie-select-grid"></div>
+      </div>
+    </div>
+    <button id="btn-wallet-refresh" class="launch-hidden">Refresh</button>
+    <button id="btn-theme-toggle-launch" class="launch-hidden">Theme</button>
+  </div>
+
+  <!-- ══ TOP HUD BAR ══════════════════════════════════════════════ -->
+  <header class="hud">
+    <div class="hud-left">
+      <span class="hud-brand">NORMIES</span>
+      <span id="zone-label" class="hud-zone">Verdant Town</span>
+    </div>
+    <div class="hud-stats">
+      <div class="hud-stat">
+        <span class="hud-stat-label">HP</span>
+        <span id="hp-label" class="hud-stat-val">110/110</span>
+      </div>
+      <div class="hud-stat">
+        <span class="hud-stat-label">NORMIE</span>
+        <span id="lead-label" class="hud-stat-val">#420</span>
+      </div>
+      <div class="hud-stat">
+        <span class="hud-stat-label">GOLD</span>
+        <span id="gold-label" class="hud-stat-val">40</span>
+      </div>
+      <div class="hud-stat">
+        <span class="hud-stat-label">POT</span>
+        <span id="potions-label" class="hud-stat-val">3</span>
+      </div>
+    </div>
+    <div class="hud-right">
+      <span id="wallet-status" class="hud-wallet">Demo</span>
+      <button id="btn-wallet-connect" class="hud-btn">Wallet</button>
+      <button id="btn-theme-toggle" class="hud-btn">&#9680;</button>
+    </div>
+    <!-- hidden legacy refs -->
+    <button id="btn-wallet-demo" class="launch-hidden">Demo</button>
+    <span id="eq-label" class="launch-hidden"></span>
+    <span id="fps-label" class="launch-hidden"></span>
+  </header>
+
+  <!-- ══ GAME CANVAS ════════════════════════════════════════════════ -->
+  <div id="game-root"></div>
+
+  <!-- ══ QUEST BANNER ══════════════════════════════════════════════ -->
+  <div id="quest-banner" class="quest-banner">
+    <span class="qb-dot"></span>
+    <span id="quest-text">Speak with Elder Vex in town.</span>
+  </div>
+
+  <!-- ══ DIALOGUE BOX ══════════════════════════════════════════════ -->
+  <div id="dialogue" class="dialogue hidden">
+    <div class="dlg-speaker" id="dialogue-name">NPC</div>
+    <div class="dlg-text" id="dialogue-text">...</div>
+    <button class="dlg-close" id="dialogue-close">Tap to continue ›</button>
+  </div>
+
+  <!-- ══ BATTLE SCREEN ═════════════════════════════════════════════ -->
+  <div id="battle" class="battle hidden">
+    <div class="battle-card">
+
+      <div class="battle-versus">
+        <div class="battle-side battle-hero-side">
+          <div class="vs-label">YOU</div>
+          <div class="vs-bar-track">
+            <div class="vs-bar-fill hero-fill" id="battle-hero-hp"></div>
+          </div>
+        </div>
+        <div class="vs-sep">
+          <span id="battle-round" class="battle-round">R1</span>
+          <span class="vs-text">VS</span>
+        </div>
+        <div class="battle-side battle-enemy-side">
+          <div class="vs-label" id="battle-enemy-name">Enemy</div>
+          <div class="vs-bar-track">
+            <div class="vs-bar-fill enemy-fill" id="battle-enemy-hp"></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="battle-log" class="battle-log"></div>
+
+      <div class="battle-actions">
+        <button id="btn-attack" class="ba-btn ba-hit">&#9876; Attack</button>
+        <button id="btn-skill"  class="ba-btn ba-skill">&#9889; Skill</button>
+        <button id="btn-potion" class="ba-btn ba-pot">&#10084; Potion</button>
+        <button id="btn-flee"   class="ba-btn ba-flee">&#8674; Flee</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ INVENTORY PANEL ═══════════════════════════════════════════ -->
+  <div id="menu" class="panel hidden">
+    <div class="panel-sheet">
+      <div class="panel-header">
+        <span class="panel-title">Inventory</span>
+        <button id="menu-close" class="panel-close">&times;</button>
+      </div>
+      <div id="menu-body" class="panel-section"></div>
+      <div id="party-body" class="panel-section"></div>
+      <div class="panel-footer">
+        <button id="btn-save-cloud" class="btn-pill">&#9729; Save</button>
+        <button id="btn-load-cloud" class="btn-pill btn-pill-ghost">&#9729; Load</button>
+        <span id="save-status" class="save-status-label">idle</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ SHOP PANEL ════════════════════════════════════════════════ -->
+  <div id="shop" class="panel hidden">
+    <div class="panel-sheet">
+      <div class="panel-header">
+        <span class="panel-title">Shop</span>
+        <button id="shop-close" class="panel-close">&times;</button>
+      </div>
+      <div id="shop-body" class="panel-section"></div>
+      <p class="panel-hint">Better loot drops in harder zones.</p>
+    </div>
+  </div>
+
+  <!-- ══ KEYBOARD HINT ════════════════════════════════════════════ -->
+  <div class="kb-hint">
+    WASD / arrows &nbsp;&#183;&nbsp; E interact &nbsp;&#183;&nbsp; I inventory &nbsp;&#183;&nbsp; Shift sprint
+  </div>
+
+  <!-- ══ MOBILE D-PAD + ACTION BUTTONS ════════════════════════════ -->
+  <div id="mobile-btns" class="mobile-btns">
+    <div class="dpad">
+      <button class="dp-btn dp-up"     id="dp-up">&#9650;</button>
+      <button class="dp-btn dp-left"   id="dp-left">&#9668;</button>
+      <button class="dp-btn dp-center" id="dp-center"></button>
+      <button class="dp-btn dp-right"  id="dp-right">&#9658;</button>
+      <button class="dp-btn dp-down"   id="dp-down">&#9660;</button>
+    </div>
+    <div class="mob-actions">
+      <button id="btn-m-interact" class="mob-act-btn">TALK</button>
+      <button id="btn-m-menu"     class="mob-act-btn">BAG</button>
+    </div>
+  </div>
+
+  <script type="module" src="./phaser-main.js"></script>
+</body>
+</html>
     <div class="launch-center">
       <p class="launch-kicker">—&nbsp;NORMIES RPG&nbsp;—</p>
       <h1 class="launch-title">YOUR NORMIES.<br>THEIR WORLD.</h1>

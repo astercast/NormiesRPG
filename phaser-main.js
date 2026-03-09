@@ -132,7 +132,7 @@ const ui = {
   hpLabel: document.getElementById('hp-label'),
   potionsLabel: document.getElementById('potions-label'),
   eqLabel: document.getElementById('eq-label'),
-  questBanner: document.getElementById('quest-banner'),
+  questBanner: document.getElementById('quest-text'),
   dialogue: document.getElementById('dialogue'),
   dialogueName: document.getElementById('dialogue-name'),
   dialogueText: document.getElementById('dialogue-text'),
@@ -195,38 +195,45 @@ function leadNormie() {
 }
 
 function buildLeadNormieTexture() {
-  if (!gameRef) return false;
-  const lead = leadNormie();
-  const px = lead?.pixels || '';
-  if (!px || px.length < 1600) return false;
+  return new Promise((resolve) => {
+    if (!gameRef) { resolve(false); return; }
+    const lead = leadNormie();
+    const px = lead?.pixels || '';
+    if (!px || px.length < 1600) { resolve(false); return; }
 
-  // Draw the 40×40 normie bitmap at 2px per pixel → 80×80 canvas.
-  // Only the dark ('1') pixels are drawn; background stays transparent.
-  const S = 2;
-  const cv = document.createElement('canvas');
-  cv.width = 40 * S;
-  cv.height = 40 * S;
-  const ctx = cv.getContext('2d');
-  ctx.clearRect(0, 0, cv.width, cv.height);
-  ctx.fillStyle = '#111110';
-  for (let y = 0; y < 40; y += 1) {
-    for (let x = 0; x < 40; x += 1) {
-      if (px[y * 40 + x] === '1') ctx.fillRect(x * S, y * S, S, S);
-    }
-  }
+    const S = 3; // 3px per normie pixel → 120×120, crisp at any zoom
+    const cv = document.createElement('canvas');
+    cv.width = 40 * S; cv.height = 40 * S;
+    const ctx = cv.getContext('2d');
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    // White body fill first (the normie is a white NFT character)
+    ctx.fillStyle = '#e0e0e0';
+    for (let y = 0; y < 40; y++)
+      for (let x = 0; x < 40; x++)
+        if (px[y * 40 + x] !== '1') {
+          // Check if adjacent to a '1' pixel (edge of figure) — fill body area
+          const nb = (x > 0 && px[y*40+x-1]==='1') || (x < 39 && px[y*40+x+1]==='1') ||
+                     (y > 0 && px[(y-1)*40+x]==='1') || (y < 39 && px[(y+1)*40+x]==='1');
+          if (nb) ctx.fillRect(x * S, y * S, S, S);
+        }
+    // Draw dark outline/detail pixels
+    ctx.fillStyle = '#111111';
+    for (let y = 0; y < 40; y++)
+      for (let x = 0; x < 40; x++)
+        if (px[y * 40 + x] === '1') ctx.fillRect(x * S, y * S, S, S);
 
-  // Use HTMLImageElement + onload so the WebGL glTexture is always ready.
-  const img = new Image();
-  img.onload = () => {
-    if (!gameRef) return;
-    if (gameRef.textures.exists(LEAD_NORMIE_TEXTURE_KEY)) {
-      gameRef.textures.remove(LEAD_NORMIE_TEXTURE_KEY);
-    }
-    gameRef.textures.addImage(LEAD_NORMIE_TEXTURE_KEY, img);
-    if (overworldRef) overworldRef.refreshLeadAvatar();
-  };
-  img.src = cv.toDataURL();
-  return true;
+    const img = new Image();
+    img.onload = () => {
+      if (!gameRef) { resolve(false); return; }
+      if (gameRef.textures.exists(LEAD_NORMIE_TEXTURE_KEY))
+        gameRef.textures.remove(LEAD_NORMIE_TEXTURE_KEY);
+      gameRef.textures.addImage(LEAD_NORMIE_TEXTURE_KEY, img);
+      if (overworldRef) overworldRef.refreshLeadAvatar();
+      resolve(true);
+    };
+    img.onerror = () => resolve(false);
+    img.src = cv.toDataURL();
+  });
 }
 
 function leadAvatarKey() {
@@ -1086,6 +1093,7 @@ class OverworldScene extends Phaser.Scene {
       this.refreshLeadAvatar();
       this.loadMap(STATE.world.mapId, STATE.world.spawnName);
       if (this.player.texture.key === ART_KEYS.player) this.player.anims.play('player-down', true);
+      else this.player.anims.stop();
     });
 
     bus.on('lead-changed', () => {
@@ -1106,9 +1114,9 @@ class OverworldScene extends Phaser.Scene {
     const key = leadAvatarKey();
     this.player.setTexture(key, 0);
     if (key === LEAD_NORMIE_TEXTURE_KEY) {
-      // Normie canvas is 80×80 — scale 0.45 = 36px world ≈ 90px on screen at zoom 2.5
-      this.player.setScale(0.45);
-      this.player.body.setSize(44, 50).setOffset(18, 22);
+      // Normie canvas is 120×120 (3px/px) — scale 0.32 = ~38px world, looks great at 2.5x zoom
+      this.player.setScale(0.32);
+      this.player.body.setSize(60, 68).setOffset(30, 38);
       this.player.clearTint();
       this.player.rotation = 0;
     } else {
@@ -1190,10 +1198,11 @@ class OverworldScene extends Phaser.Scene {
 
   movePlayer(delta) {
     const tm = this.touchMove;
-    const left  = this.keys.LEFT.isDown  || this.keys.A.isDown || tm.x < -0.25;
-    const right = this.keys.RIGHT.isDown || this.keys.D.isDown || tm.x >  0.25;
-    const up    = this.keys.UP.isDown    || this.keys.W.isDown || tm.y < -0.25;
-    const down  = this.keys.DOWN.isDown  || this.keys.S.isDown || tm.y >  0.25;
+    const dp = window._dpadState || {};
+    const left  = this.keys.LEFT.isDown  || this.keys.A.isDown || tm.x < -0.25 || dp.left;
+    const right = this.keys.RIGHT.isDown || this.keys.D.isDown || tm.x >  0.25 || dp.right;
+    const up    = this.keys.UP.isDown    || this.keys.W.isDown || tm.y < -0.25 || dp.up;
+    const down  = this.keys.DOWN.isDown  || this.keys.S.isDown || tm.y >  0.25 || dp.down;
 
     const sprint = this.keys.SHIFT.isDown ? 1.7 : 1;
     const speed = 172 * sprint;
@@ -1516,7 +1525,8 @@ async function hydrateDemoParty() {
   STATE.identity.walletAddress = null;
   STATE.identity.walletName = 'Demo';
   applyLeadNormieStats();
-  buildLeadNormieTexture();
+  // Build normie texture and wait for it to be ready before starting game
+  if (gameRef) await buildLeadNormieTexture();
   bus.emit('state-reloaded');
   updateWalletStatus();
   updateHud();
@@ -1538,14 +1548,14 @@ async function hydrateWalletParty(providerId = null) {
     }
 
     // Show normie picker — player chooses exactly 1.
-    showNormiePicker(owned, (chosen) => {
+    showNormiePicker(owned, async (chosen) => {
       STATE.party.roster = [chosen];
       STATE.party.leadId = chosen.id;
       STATE.identity.mode = 'wallet';
       STATE.identity.walletAddress = address;
       STATE.identity.walletName = walletName;
       applyLeadNormieStats();
-      buildLeadNormieTexture();
+      if (gameRef) await buildLeadNormieTexture();
       updateWalletStatus();
       setLaunchStatus(`Playing as ${chosen.name}.`);
       updateHud();
@@ -1638,7 +1648,23 @@ initUiTheme();
 renderWalletChoices();
 updateHud('Verdant Town');
 
-// Mobile action buttons (visible on touch devices via CSS media query)
+// D-pad mobile controls
+(function wireDpad() {
+  const dpad = { up: false, down: false, left: false, right: false };
+  const set = (dir, val) => { dpad[dir] = val; };
+  const dirs = ['up','down','left','right'];
+  dirs.forEach((dir) => {
+    const el = document.getElementById(`dp-${dir}`);
+    if (!el) return;
+    el.addEventListener('pointerdown', (e) => { e.preventDefault(); set(dir, true); });
+    el.addEventListener('pointerup',   () => set(dir, false));
+    el.addEventListener('pointerleave',() => set(dir, false));
+  });
+  // Expose to overworld scene via global
+  window._dpadState = dpad;
+})();
+
+// Mobile action buttons
 document.getElementById('btn-m-interact')?.addEventListener('click', () => {
   if (overworldRef && !overworldRef.overlayLocked) overworldRef.handleInteract();
 });
