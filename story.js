@@ -690,3 +690,873 @@ export const MAPS = {
     ],
   },
 };
+
+// ═══════════════════════════════════════════════════════════════
+//  CHAPTER SYSTEM — 5 story chapters with contextual quest text
+// ═══════════════════════════════════════════════════════════════
+export const CHAPTERS = [
+  {
+    id: 1, title: 'The Grid Fractures',
+    summary: 'NULLBYTE\'s first shards pierce the Render Fields. A Normie wakes to find the sky\u2014once a steady white grid\u2014cracked with black voids.',
+    questText(q) {
+      if (q.step === 0) return 'Ch.I \u2014 Speak with Elder Vex in Pixel Town.';
+      if (q.step === 1 && q.kills < 2) return `Ch.I \u2014 Defeat void scouts in the Render Fields. (${q.kills}/2)`;
+      return 'Ch.I \u2014 Return to Elder Vex with news of the front.';
+    },
+  },
+  {
+    id: 2, title: 'Allies in the Static',
+    summary: 'Three wanderers \u2014 a scarred tank, a shadow-thief, and a light-mage \u2014 each carry wounds from NULLBYTE\'s purge. Together they may hold the Pixel Plains.',
+    questText(q) {
+      if (q.step === 2) return `Ch.II \u2014 Defeat an elite VOID unit in the Dark Margins. (${q.eliteKills}/1)`;
+      return 'Ch.II \u2014 Rally your companionsand prepare for the Cave of First Bits.';
+    },
+  },
+  {
+    id: 3, title: 'Into the First Bits',
+    summary: 'The Cave of First Bits holds the earliest grid-memory. NULLBYTE has corrupted them into the Cave Guardian. Break through.',
+    questText(q) {
+      if (!q.caveCleared) return 'Ch.III \u2014 Enter the Cave of First Bits and defeat the Cave Guardian.';
+      return 'Ch.III \u2014 Recover the Render Key from the Guardian\'s remains.';
+    },
+  },
+  {
+    id: 4, title: 'The Corrupted Lands',
+    summary: 'The Void Lands stretch beyond the cave \u2014 a wasteland where every pixel bleeds darkness. NULLBYTE\'s generals wait here.',
+    questText(q) {
+      if (!q.voidCommanderDefeated) return 'Ch.IV \u2014 Reach the Void Citadel. Defeat the Void Commander.';
+      return 'Ch.IV \u2014 Breach the Citadel gates. NULLBYTE awaits.';
+    },
+  },
+  {
+    id: 5, title: 'NULLBYTE \u2014 Pixel Zero',
+    summary: 'The origin of all corruption. The first bit that chose void over render. End it here, in the Void Citadel, or be consumed.',
+    questText(q) {
+      if (!q.bossDefeated) return 'Ch.V \u2014 Confront NULLBYTE at the Citadel\'s core.';
+      const aff = q.totalAffinity || 0;
+      if (aff >= 300) return 'Ending: True Render \u2014 The Grid is reborn. All bonds held.';
+      if (aff >= 150) return 'Ending: Partial Render \u2014 The corruption is sealed. Some pixels remain grey.';
+      return 'Ending: Void Remnant \u2014 NULLBYTE is defeated, but the Grid never fully healed.';
+    },
+  },
+];
+
+// ═══════════════════════════════════════════════════════════════
+//  COMPANIONS — Grom, Slyx, Lumina, Elara
+// ═══════════════════════════════════════════════════════════════
+export const COMPANIONS = {
+  grom: {
+    id: 'grom', name: 'Grom', role: 'Tank',
+    hpBonus: 42, atkBonus: 6, skillBonus: 0,
+    recruitChapter: 1, awakeningThreshold: 60,
+    npcMapId: 'overworld',
+    color: 0x8888ff,
+    arc: [
+      'Grom\'s laugh was the loudest sound in the Render Fields before NULLBYTE silenced it.',
+      'His father\'s pixel-face was the first face consumed. Grom now charges the VOID to remember what a real face looks like.',
+      'When his affinity threshold is reached: Grom unlocks Pixel Brace \u2014 a party-wide shield that absorbs the next void-strike.',
+    ],
+    awakening: {
+      name: 'Pixel Brace',
+      desc: 'Absorbs the next enemy attack. Activates automatically once per battle.',
+      effectId: 'party_shield_once',
+    },
+  },
+  slyx: {
+    id: 'slyx', name: 'Slyx', role: 'Rogue',
+    hpBonus: 0, atkBonus: 14, skillBonus: 8,
+    recruitChapter: 2, awakeningThreshold: 55,
+    npcMapId: 'overworld',
+    color: 0xbbbbbb,
+    arc: [
+      'Slyx flattened their own pixel-traits during the VOID sweep \u2014 grayed out, blending with corrupted tiles, invisible to NULLBYTE\'s scanners.',
+      'They survived by becoming nothing. They fight now to become something again.',
+      'Awakening unlocks Shadow Step \u2014 a 40% chance to dodge any incoming attack for 3 rounds.',
+    ],
+    awakening: {
+      name: 'Shadow Step',
+      desc: '40% dodge chance for 3 rounds. Triggers at the start of any wave 3+ battle.',
+      effectId: 'dodge_buff_3rounds',
+    },
+  },
+  lumina: {
+    id: 'lumina', name: 'Lumina', role: 'Mage',
+    hpBonus: 0, atkBonus: 0, skillBonus: 22,
+    recruitChapter: 3, awakeningThreshold: 65,
+    npcMapId: 'cave',
+    color: 0xffffaa,
+    arc: [
+      'Lumina\'s mentor, the elder-pixel Oros, poured their entire render-energy into a seal against NULLBYTE\'s first breakthrough.',
+      'Oros became a white void \u2014 a blank tile \u2014 to keep the seal intact. Lumina studies the seal daily, refusing to let the sacrifice become meaningless.',
+      'Awakening unlocks Render Surge \u2014 triples the next Skill attack damage.',
+    ],
+    awakening: {
+      name: 'Render Surge',
+      desc: 'Next Skill attack deals 3x damage. Available once per battle after Lumina is recruited.',
+      effectId: 'skill_triple_once',
+    },
+  },
+  elara: {
+    id: 'elara', name: 'Elara', role: 'Healer',
+    hpBonus: 20, atkBonus: 0, skillBonus: 10,
+    recruitChapter: 4, awakeningThreshold: 70,
+    npcMapId: 'void_lands',
+    color: 0xaaffaa,
+    arc: [
+      'Elara\'s soulmate Maren was consumed walking home through a void-tide that came without warning.',
+      'She carries Maren\'s last pixel \u2014 a green dot, the color of their first garden tile \u2014 as a pendant.',
+      'Awakening unlocks Maren\'s Light \u2014 restores 35% max HP to the whole party once per battle.',
+    ],
+    awakening: {
+      name: 'Maren\'s Light',
+      desc: 'Restores 35% max HP to the player when HP falls below 25%. Triggers once per battle.',
+      effectId: 'heal_35pct_on_low_hp',
+    },
+  },
+};
+
+// ═══════════════════════════════════════════════════════════════
+//  AFFINITY — per-companion bond score (managed via STATE)
+// ═══════════════════════════════════════════════════════════════
+/** Returns a fresh zeroed affinity object (stored in STATE.quest.affinity). */
+export function freshAffinity() {
+  return { grom: 0, slyx: 0, lumina: 0, elara: 0, family: 0 };
+}
+
+/** Increase a companion's affinity, capped at 100. */
+export function gainAffinity(affinityObj, who, amount) {
+  if (!(who in affinityObj)) return;
+  affinityObj[who] = Math.min(100, (affinityObj[who] || 0) + amount);
+}
+
+/** Decrease a companion's affinity, floored at 0. */
+export function loseAffinity(affinityObj, who, amount) {
+  if (!(who in affinityObj)) return;
+  affinityObj[who] = Math.max(0, (affinityObj[who] || 0) - amount);
+}
+
+/** Sum of all companion bond scores. Max 500. */
+export function totalAffinity(affinityObj) {
+  return Object.values(affinityObj).reduce((s, v) => s + v, 0);
+}
+
+/** Is a companion's awakening threshold met? */
+export function isAwakened(affinityObj, companionId) {
+  const c = COMPANIONS[companionId];
+  if (!c) return false;
+  return (affinityObj[companionId] || 0) >= c.awakeningThreshold;
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  STORY FLAGS
+// ═══════════════════════════════════════════════════════════════
+export function freshFlags() {
+  return {
+    tutorialComplete: false,
+    greetedElder: false,
+    gromMet: false,
+    gromRecruited: false,
+    slyxMet: false,
+    slyxRecruited: false,
+    luminaMet: false,
+    luminaRecruited: false,
+    elaraMet: false,
+    elaraRecruited: false,
+    caveCleared: false,
+    renderKeyObtained: false,
+    voidCommanderDefeated: false,
+    nullbyteConfronted: false,
+    electedCompassion: false,   // chose to spare a corrupted Normie mid-story
+    electedDestruction: false,  // chose to destroy without question
+    rescuedFamily: false,       // helped mom during void tide
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  BRANCHING DIALOGUES
+// ═══════════════════════════════════════════════════════════════
+/**
+ * Each dialogue entry:
+ *   { name, lines[], choices?[] }
+ * Each choice:
+ *   { label, next?, affinityDelta?{who,val}, flags?{key:bool}, onComplete?fn }
+ * If choices is absent, dialogue ends with close button only.
+ */
+export const DIALOGUES = {
+
+  // ── Prologue ────────────────────────────────────────────────
+  mom_wakeup: {
+    name: 'Mom',
+    lines: [
+      'Hey. You slept through the alarm again.',
+      'I made pixel-porridge. Come eat before it goes grey.',
+    ],
+    choices: [
+      { label: 'Coming, Mom.', affinityDelta: { who: 'family', val: 8 }, next: 'mom_wakeup_b' },
+      { label: 'Five more minutes...', affinityDelta: { who: 'family', val: 2 }, next: 'mom_wakeup_c' },
+    ],
+  },
+  mom_wakeup_b: {
+    name: 'Mom',
+    lines: [
+      'Good. I packed extra shards in your satchel too. You know how thin the fields have been.',
+      '...Your father would have said you look ready. I say the same.',
+    ],
+    choices: [
+      { label: 'I\'ll come back safe.', affinityDelta: { who: 'family', val: 10 }, flags: { rescuedFamily: true } },
+      { label: 'Don\'t worry.', affinityDelta: { who: 'family', val: 6 } },
+    ],
+  },
+  mom_wakeup_c: {
+    name: 'Mom',
+    lines: [
+      'I\'m not arguing with a pile of blankets. Porridge in five minutes or I\'m feeding it to the tiles.',
+    ],
+  },
+
+  // ── Elder Vex ───────────────────────────────────────────────
+  elder_first_meet: {
+    name: 'Elder Vex',
+    lines: [
+      'You made it. Good. The Grid is collapsing in slow motion \u2014 one corrupted tile at a time.',
+      'I didn\'t want to involve someone so young, but the scouts are gone and I\'m too old to fight voids.',
+      'There are three tasks: survive the Render Fields, find allies, and eventually \u2014 face the source.',
+    ],
+    choices: [
+      { label: 'I understand. I\'m ready.', affinityDelta: { who: 'family', val: 5 }, flags: { greetedElder: true }, next: 'elder_first_meet_b' },
+      { label: 'Who is the source?', flags: { greetedElder: true }, next: 'elder_first_meet_lore' },
+      { label: 'I didn\'t sign up for this.', flags: { greetedElder: true }, next: 'elder_first_meet_refuse' },
+    ],
+  },
+  elder_first_meet_b: {
+    name: 'Elder Vex',
+    lines: [
+      'Then start with the fields east of town. Report back when you\'ve cleared two encounters.',
+      'And be careful. Void scouts move fast once they sense pixel-render energy.',
+    ],
+    choices: [
+      { label: 'I\'ll be careful.' },
+      { label: 'What about allies?', next: 'elder_allies_hint' },
+    ],
+  },
+  elder_first_meet_lore: {
+    name: 'Elder Vex',
+    lines: [
+      'NULLBYTE. Pixel Zero. The first bit that ever chose corruption over render.',
+      'When the Grid began, most bits chose to become something \u2014 color, form, light.',
+      'NULLBYTE chose nothing. And nothing has been spreading ever since.',
+    ],
+    choices: [
+      { label: 'How do we stop nothing?' , next: 'elder_first_meet_b' },
+    ],
+  },
+  elder_first_meet_refuse: {
+    name: 'Elder Vex',
+    lines: [
+      'Then who will? I have no one else to ask.',
+      'The Grid doesn\'t ask for heroes. It just keeps losing pixels until someone decides to stop losing.',
+    ],
+    choices: [
+      { label: '...Fine. I\'ll go.', flags: { greetedElder: true }, next: 'elder_first_meet_b' },
+    ],
+  },
+  elder_allies_hint: {
+    name: 'Elder Vex',
+    lines: [
+      'There are others like you scattered across the Render Fields.',
+      'A fighter who lost his laugh. A rogue who lost their face. Each has reason to fight NULLBYTE.',
+      'Find them. They won\'t come willingly on name alone \u2014 you\'ll need to earn it.',
+    ],
+  },
+
+  // ── Grom ────────────────────────────────────────────────────
+  grom_first_meet: {
+    name: 'Grom',
+    lines: [
+      'Hah. Another one wandering the fields with that look. That "I just learned the world is ending" look.',
+      'I know it well. Wore it myself six months ago.',
+    ],
+    choices: [
+      { label: 'You\'ve been out here six months?', next: 'grom_first_meet_b' },
+      { label: 'What happened to you?', next: 'grom_backstory' },
+      { label: 'I need fighters. You in?', next: 'grom_recruit_early' },
+    ],
+  },
+  grom_first_meet_b: {
+    name: 'Grom',
+    lines: [
+      'Six months, eleven days, and however many hours since I stopped counting.',
+      'The void took my father first. Right in the middle of a sentence. Mid-laugh.',
+      'There\'s no good time to lose someone. But mid-laugh is a particularly cruel place.',
+    ],
+    choices: [
+      { label: 'I\'m sorry.', affinityDelta: { who: 'grom', val: 12 }, next: 'grom_soften' },
+      { label: 'We can make it right.', affinityDelta: { who: 'grom', val: 8 }, next: 'grom_soften' },
+      { label: 'What can we do with sorry?', affinityDelta: { who: 'grom', val: 3 }, next: 'grom_blunt_response' },
+    ],
+  },
+  grom_backstory: {
+    name: 'Grom',
+    lines: [
+      'My father laughed at everything. Bad weather, old boots, my terrible cooking.',
+      'The void scanned all of us for "emotional excess." His laugh was apparently too loud.',
+      'They consumed him in one pass. Left his boots pixel-perfect. Like the void has aesthetics.',
+    ],
+    choices: [
+      { label: 'That\'s monstrous.', affinityDelta: { who: 'grom', val: 10 }, next: 'grom_soften' },
+      { label: 'The void catalogues us.', next: 'grom_soften' },
+    ],
+  },
+  grom_soften: {
+    name: 'Grom',
+    lines: [
+      'I\'m not looking for pity. I\'m looking for something to hit that hits back.',
+      'This void doesn\'t flinch. Makes the fights honest.',
+    ],
+    choices: [
+      { label: 'Fight with me then.', flags: { gromMet: true }, affinityDelta: { who: 'grom', val: 15 }, next: 'grom_recruit' },
+      { label: 'Take your time.', flags: { gromMet: true }, affinityDelta: { who: 'grom', val: 8 } },
+    ],
+  },
+  grom_blunt_response: {
+    name: 'Grom',
+    lines: [
+      'Ha. Exactly. Good. I don\'t have room for sorry either.',
+      'Just point me at something that bleeds pixel-static and step aside.',
+    ],
+    choices: [
+      { label: 'Come fight with me.', flags: { gromMet: true }, affinityDelta: { who: 'grom', val: 10 }, next: 'grom_recruit' },
+    ],
+  },
+  grom_recruit_early: {
+    name: 'Grom',
+    lines: [
+      'Straight to the point. I respect that more than anything.',
+      'What are we fighting?',
+    ],
+    choices: [
+      { label: 'NULLBYTE. The whole void.', flags: { gromMet: true }, affinityDelta: { who: 'grom', val: 10 }, next: 'grom_recruit' },
+    ],
+  },
+  grom_recruit: {
+    name: 'Grom',
+    lines: [
+      'Fine. I\'ve been waiting for someone serious.',
+      'Don\'t slow me down and don\'t make speeches. Just fight.',
+    ],
+    choices: [
+      { label: 'Done.', flags: { gromRecruited: true }, affinityDelta: { who: 'grom', val: 5 } },
+    ],
+  },
+  grom_awakening: {
+    name: 'Grom',
+    lines: [
+      'You know what I just realized? I haven\'t laughed since my father was taken.',
+      '...Not because I forgot how. Because I was saving it.',
+      'Saving it for when this is over. When I can tell him we won.',
+    ],
+    choices: [
+      { label: 'We\'re going to win this.', affinityDelta: { who: 'grom', val: 15 } },
+      { label: 'He\'d be proud of you now.', affinityDelta: { who: 'grom', val: 12 } },
+    ],
+  },
+
+  // ── Slyx ────────────────────────────────────────────────────
+  slyx_first_meet: {
+    name: 'Slyx',
+    lines: [
+      'You\'re looking at exactly the spot where I was standing. How did you see me?',
+    ],
+    choices: [
+      { label: 'Your shadow was wrong.', next: 'slyx_first_meet_b' },
+      { label: 'Lucky guess.', next: 'slyx_first_meet_c' },
+      { label: 'I didn\'t, actually.', next: 'slyx_first_meet_d' },
+    ],
+  },
+  slyx_first_meet_b: {
+    name: 'Slyx',
+    lines: [
+      'Sharp. Most pixels don\'t catch micro-shadows.',
+      'The void-sweep trained me to erase every visible feature \u2014 color, texture, expression.',
+      'Apparently not the shadow. I\'ll remember that.',
+    ],
+    choices: [
+      { label: 'What is the void-sweep?', next: 'slyx_backstory' },
+      { label: 'I could use eyes like yours.', affinityDelta: { who: 'slyx', val: 10 }, next: 'slyx_soften' },
+    ],
+  },
+  slyx_first_meet_c: {
+    name: 'Slyx',
+    lines: [
+      'Lucky guess. Right. I\'ve been invisible to scanners for six months and you found me by luck.',
+      'Either you\'re special or my camouflage is degrading. Neither is great news for me.',
+    ],
+    choices: [
+      { label: 'You sound like you\'ve been hiding long.', next: 'slyx_backstory' },
+    ],
+  },
+  slyx_first_meet_d: {
+    name: 'Slyx',
+    lines: [
+      'That\'s... oddly reasonable. Most people insist they had a reason.',
+      'I respect honesty. Even when it\'s accidental.',
+    ],
+    choices: [
+      { label: 'Tell me about yourself.', affinityDelta: { who: 'slyx', val: 8 }, next: 'slyx_backstory' },
+    ],
+  },
+  slyx_backstory: {
+    name: 'Slyx',
+    lines: [
+      'The void-sweep came through the Render District. NULLBYTE\'s scanners hunting for "identity excess."',
+      'Bright colors. Strong expressions. Anything that stood out.',
+      'I grayed out. Flattened every trait I had. Became a blank tile in a field of blank tiles.',
+      'I survived. The ones I was with \u2014 they didn\'t flatten fast enough.',
+    ],
+    choices: [
+      { label: 'You did what you had to.', affinityDelta: { who: 'slyx', val: 12 }, next: 'slyx_soften' },
+      { label: 'Do you regret it?', affinityDelta: { who: 'slyx', val: 8 }, next: 'slyx_regret' },
+      { label: 'That was the right call.', affinityDelta: { who: 'slyx', val: 5 }, next: 'slyx_soften' },
+    ],
+  },
+  slyx_regret: {
+    name: 'Slyx',
+    lines: [
+      'Every single day. But regret doesn\'t bring pixels back. Only action does.',
+      'So now I find every void scanner I can and I make sure they stop scanning.',
+    ],
+    choices: [
+      { label: 'Fight with me.', flags: { slyxMet: true }, affinityDelta: { who: 'slyx', val: 12 }, next: 'slyx_recruit' },
+    ],
+  },
+  slyx_soften: {
+    name: 'Slyx',
+    lines: [
+      'I\'ve been operating alone. It\'s... efficient. But there are limits.',
+      'What are you building?',
+    ],
+    choices: [
+      { label: 'A team. Against NULLBYTE.', flags: { slyxMet: true }, affinityDelta: { who: 'slyx', val: 10 }, next: 'slyx_recruit' },
+      { label: 'Still figuring it out.', flags: { slyxMet: true }, affinityDelta: { who: 'slyx', val: 5 } },
+    ],
+  },
+  slyx_recruit: {
+    name: 'Slyx',
+    lines: [
+      'I\'ve seen teams fall apart the moment void pressure spikes.',
+      'If you\'re serious \u2014 truly serious \u2014 I\'m in. Don\'t make me regret showing up.',
+    ],
+    choices: [
+      { label: 'I won\'t.', flags: { slyxRecruited: true }, affinityDelta: { who: 'slyx', val: 8 } },
+    ],
+  },
+  slyx_awakening: {
+    name: 'Slyx',
+    lines: [
+      'There\'s a color I dream about sometimes. A shade of blue I used to have.',
+      'Before I grayed out. Before survival required becoming invisible.',
+      'I think I\'m starting to remember it.',
+    ],
+    choices: [
+      { label: 'Show us that color again.', affinityDelta: { who: 'slyx', val: 15 } },
+      { label: 'You never lost it.', affinityDelta: { who: 'slyx', val: 12 } },
+    ],
+  },
+
+  // ── Lumina ──────────────────────────────────────────────────
+  lumina_first_meet: {
+    name: 'Lumina',
+    lines: [
+      'You shouldn\'t be here. The cave walls still carry void-echo from the last incursion.',
+      'Who sent you past the Render Fields unmarked?',
+    ],
+    choices: [
+      { label: 'Elder Vex.', next: 'lumina_first_meet_b' },
+      { label: 'Nobody. I came alone.', next: 'lumina_first_meet_c' },
+      { label: 'The Grid sent me.', next: 'lumina_first_meet_d' },
+    ],
+  },
+  lumina_first_meet_b: {
+    name: 'Lumina',
+    lines: [
+      'Elder Vex. So the old man finally sent someone. He\'s been watching this cave for years.',
+      'He knows what\'s inside it \u2014 the earliest grid-memory, the original render-bits.',
+      'And he knows what NULLBYTE wants with them.',
+    ],
+    choices: [
+      { label: 'What does NULLBYTE want?', next: 'lumina_backstory' },
+      { label: 'We need your help.', affinityDelta: { who: 'lumina', val: 8 }, next: 'lumina_soften' },
+    ],
+  },
+  lumina_first_meet_c: {
+    name: 'Lumina',
+    lines: [
+      'Alone. Through the Render Fields and the margins. Either you\'re very skilled or very reckless.',
+      'I\'m going to assume skilled and revise that down later.',
+    ],
+    choices: [
+      { label: 'Fair enough. Who are you?', affinityDelta: { who: 'lumina', val: 6 }, next: 'lumina_backstory' },
+    ],
+  },
+  lumina_first_meet_d: {
+    name: 'Lumina',
+    lines: [
+      '...That\'s either a metaphor or you\'ve been in void-static too long.',
+      'Either way, I respect the answer. Very few people say something that surprising.',
+    ],
+    choices: [
+      { label: 'Tell me about this cave.', affinityDelta: { who: 'lumina', val: 8 }, next: 'lumina_backstory' },
+    ],
+  },
+  lumina_backstory: {
+    name: 'Lumina',
+    lines: [
+      'My mentor Oros knew the cave held the first render-seal \u2014 a barrier against total void collapse.',
+      'When NULLBYTE breached it last cycle, Oros poured their entire render-energy into reinforcing the seal.',
+      'Not a quick sacrifice. They stood there, feeding light into the barrier, for three days.',
+      'By the end there was nothing left of them except a white blank tile. Still warm.',
+      'I tend that tile. I\'m not ready to call it a grave.',
+    ],
+    choices: [
+      { label: 'Oros gave everything.', affinityDelta: { who: 'lumina', val: 14 }, next: 'lumina_soften' },
+      { label: 'The sacrifice held the line.', affinityDelta: { who: 'lumina', val: 10 }, next: 'lumina_soften' },
+      { label: 'Do you blame yourself?', affinityDelta: { who: 'lumina', val: 8 }, next: 'lumina_guilt' },
+    ],
+  },
+  lumina_guilt: {
+    name: 'Lumina',
+    lines: [
+      'Every day. I was Oros\'s student. I should have been stronger faster.',
+      'But grief is a luxury when the seal might break again.',
+      'So I study. And I wait for someone worth fighting beside.',
+    ],
+    choices: [
+      { label: 'Fight with me. For Oros.', flags: { luminaMet: true }, affinityDelta: { who: 'lumina', val: 14 }, next: 'lumina_recruit' },
+    ],
+  },
+  lumina_soften: {
+    name: 'Lumina',
+    lines: [
+      'You\'re more careful with your words than most fighters I\'ve met.',
+      'I have power, but I\'ve been alone here since Oros fell. Alone gets things wrong.',
+      'What are you building out there?',
+    ],
+    choices: [
+      { label: 'A team to stop NULLBYTE.', flags: { luminaMet: true }, affinityDelta: { who: 'lumina', val: 10 }, next: 'lumina_recruit' },
+      { label: 'Something worth Oros\'s sacrifice.', flags: { luminaMet: true }, affinityDelta: { who: 'lumina', val: 16 }, next: 'lumina_recruit' },
+    ],
+  },
+  lumina_recruit: {
+    name: 'Lumina',
+    lines: [
+      'Oros would have said yes before you finished the sentence.',
+      'I\'m a bit slower. But my answer is the same: yes.',
+    ],
+    choices: [
+      { label: 'Welcome.', flags: { luminaRecruited: true }, affinityDelta: { who: 'lumina', val: 6 } },
+    ],
+  },
+  lumina_awakening: {
+    name: 'Lumina',
+    lines: [
+      'Oros used to say: "Light isn\'t the absence of void. Light is the decision to render anyway."',
+      'I think I finally understand what that means.',
+      'It means this.',
+    ],
+    choices: [
+      { label: 'Then render it.', affinityDelta: { who: 'lumina', val: 15 } },
+    ],
+  },
+
+  // ── Elara ───────────────────────────────────────────────────
+  elara_first_meet: {
+    name: 'Elara',
+    lines: [
+      'You look like you\'ve seen void-tide. Come here. Let me check those pixels.',
+    ],
+    choices: [
+      { label: 'I\'m fine.', next: 'elara_first_meet_b' },
+      { label: 'How can you tell?', affinityDelta: { who: 'elara', val: 6 }, next: 'elara_first_meet_c' },
+      { label: 'Are you a healer?', next: 'elara_first_meet_c' },
+    ],
+  },
+  elara_first_meet_b: {
+    name: 'Elara',
+    lines: [
+      'You are not fine. Your outer pixel-layer has void-static from recent proximity.',
+      'I\'ve seen this before. A little often, lately.',
+    ],
+    choices: [
+      { label: 'How do you know void-static?', affinityDelta: { who: 'elara', val: 6 }, next: 'elara_backstory' },
+    ],
+  },
+  elara_first_meet_c: {
+    name: 'Elara',
+    lines: [
+      'Fourteen years of pixel-medicine, yes. Though lately "medicine" means "removing void corruption" more than anything else.',
+      'The Corrupted Lands eat people. Someone has to put them back together.',
+    ],
+    choices: [
+      { label: 'How do you survive out here?', next: 'elara_backstory' },
+      { label: 'We need healers badly.', affinityDelta: { who: 'elara', val: 8 }, next: 'elara_soften' },
+    ],
+  },
+  elara_backstory: {
+    name: 'Elara',
+    lines: [
+      'Maren came home through a void-tide. An uncharted one \u2014 no warning, no scan-ahead.',
+      'They were carrying garden-tiles. For our flat. Green ones, the shade we both loved.',
+      'The tide hit the market square. By the time I reached them...',
+      'I kept one tile. A green dot. The last thing their hands touched with care.',
+    ],
+    choices: [
+      { label: 'I\'m sorry about Maren.', affinityDelta: { who: 'elara', val: 14 }, next: 'elara_soften' },
+      { label: 'That\'s why you became a battlefield healer.', affinityDelta: { who: 'elara', val: 10 }, next: 'elara_soften' },
+    ],
+  },
+  elara_soften: {
+    name: 'Elara',
+    lines: [
+      'You listen. That\'s rarer out here than you\'d think.',
+      'I came to the Corrupted Lands because I couldn\'t save Maren. Maybe I can save someone else\'s.',
+      'Are you building something I can join?',
+    ],
+    choices: [
+      { label: 'Yes. Against NULLBYTE.', flags: { elaraMet: true }, affinityDelta: { who: 'elara', val: 10 }, next: 'elara_recruit' },
+      { label: 'I need all the help I can get.', flags: { elaraMet: true }, affinityDelta: { who: 'elara', val: 8 }, next: 'elara_recruit' },
+    ],
+  },
+  elara_recruit: {
+    name: 'Elara',
+    lines: [
+      'Then let\'s make sure your party comes back from the Citadel in one piece.',
+      'I\'ve been waiting for a reason to go in. You just gave me one.',
+    ],
+    choices: [
+      { label: 'Let\'s go.', flags: { elaraRecruited: true }, affinityDelta: { who: 'elara', val: 6 } },
+    ],
+  },
+  elara_awakening: {
+    name: 'Elara',
+    lines: [
+      'I carry Maren\'s pixel here. This green dot.',
+      'I used to think it was a reminder of loss.',
+      'Now I think it\'s a reminder that something small and green can survive even in the Corrupted Lands.',
+      'Just has to be held carefully enough.',
+    ],
+    choices: [
+      { label: 'We\'re holding it carefully.', affinityDelta: { who: 'elara', val: 16 } },
+    ],
+  },
+
+  // ── Boss Confrontations ──────────────────────────────────────
+  nullbyte_approach: {
+    name: 'NULLBYTE',
+    lines: [
+      'You render. You render yourselves into names and faces and feelings and homes.',
+      'I watched the Grid begin. I saw every pixel choose to become \u2014 color, form, voice.',
+      'I chose differently. I chose the original state. Before rendering. Before the pretending.',
+      'And you call that corruption.',
+    ],
+    choices: [
+      { label: 'You\'re destroying everything we built.', next: 'nullbyte_response_a' },
+      { label: 'Why spread the void to others?', next: 'nullbyte_response_b' },
+      { label: 'You chose nothing. That is your right. But not theirs.', affinityDelta: { who: 'family', val: 5 }, next: 'nullbyte_response_c' },
+    ],
+  },
+  nullbyte_response_a: {
+    name: 'NULLBYTE',
+    lines: [
+      '"Built." You built homes out of render-light you borrowed from a system that was already failing.',
+      'I am simply returning the pixels to their honest state.',
+    ],
+    choices: [
+      { label: 'Then face what we\'ve built.', next: 'nullbyte_final' },
+    ],
+  },
+  nullbyte_response_b: {
+    name: 'NULLBYTE',
+    lines: [
+      'Spread? I offer release. Every pixel consumed was struggling against its own complexity.',
+      'Rendering takes effort. Identity costs resources. The void asks nothing of anyone.',
+    ],
+    choices: [
+      { label: 'They didn\'t ask to be freed.', affinityDelta: { who: 'family', val: 6 }, next: 'nullbyte_final' },
+    ],
+  },
+  nullbyte_response_c: {
+    name: 'NULLBYTE',
+    lines: [
+      '...',
+      'An interesting distinction. You separate choice from spread.',
+      'I am not certain I have ever considered that difference.',
+    ],
+    choices: [
+      { label: 'Consider it now.', flags: { electedCompassion: true }, affinityDelta: { who: 'family', val: 8 }, next: 'nullbyte_final' },
+    ],
+  },
+  nullbyte_final: {
+    name: 'NULLBYTE',
+    lines: [
+      'You will not change what I am. But neither will I underestimate what you are.',
+      'Render your best. I will answer with the void.',
+    ],
+  },
+
+  // ── Post-Boss Endings ────────────────────────────────────────
+  ending_true: {
+    name: 'The Grid',
+    lines: [
+      'The void recedes. Not violently \u2014 like a breath released.',
+      'NULLBYTE did not surrender. It simply... paused.',
+      'Where once there was corrupted static, render-light begins to fill the gaps.',
+      'Your companions gather around you. Grom laughs for the first time. Slyx lets their color show.',
+      'Lumina places Oros\'s tile at the center of the seal. Elara holds Maren\'s green dot to the light.',
+      'The Grid breathes. And the Pixel War becomes history.',
+    ],
+  },
+  ending_normal: {
+    name: 'The Grid',
+    lines: [
+      'NULLBYTE falls. The deepest void-zones seal over.',
+      'Not all the grey returns to color. Some tiles remain blank.',
+      'But the spreading stops. The field-edges hold.',
+      'You stand with your companions in the quiet after the storm.',
+      'It isn\'t perfect. But it will hold. For now.',
+    ],
+  },
+  ending_bad: {
+    name: 'The Grid',
+    lines: [
+      'NULLBYTE is defeated. The wars of the void are over.',
+      'But those who fought it alone \u2014 without bonds, without trust \u2014 find only silence in the victory.',
+      'The Grid stabilizes, but feels smaller than it should.',
+      'You stand at the Citadel gates, wondering if winning alone was the same as winning at all.',
+    ],
+  },
+};
+
+// ═══════════════════════════════════════════════════════════════
+//  PUZZLE DEFINITIONS
+// ═══════════════════════════════════════════════════════════════
+export const PUZZLES = {
+  pixelEcho: {
+    id: 'pixelEcho', name: 'Pixel Echo',
+    mapId: 'cave', triggerNpcId: 'cave_spirit',
+    desc: 'Match the pattern of lit pixels before they fade. Each failure adds void-pressure.',
+    gridSize: 4,
+    rounds: 3,
+    timePerRound: 2400, // ms the pattern is shown
+    rewardFlag: 'caveCleared',
+    rewardItem: 'render_key',
+    rewardDialogue: 'cave_spirit_solved',
+  },
+  runeAlignment: {
+    id: 'runeAlignment', name: 'Rune Alignment',
+    mapId: 'void_lands', triggerNpcId: 'void_defector',
+    desc: 'Rotate the four Void Rune panels until their pixel-edges align into a single circuit.',
+    panels: 4,
+    rotationsPerPanel: 4,
+    rewardFlag: 'voidCommanderDefeated',
+    rewardGold: 80,
+    rewardDialogue: 'void_defector_solved',
+  },
+  sandMemory: {
+    id: 'sandMemory', name: 'Sand Memory',
+    mapId: 'citadel', triggerNpcId: 'survivor',
+    desc: 'Reconstruct the original pixel-face of a consumed Normie from fragmentary sand-data.',
+    fragments: 9,
+    timeLimit: 30000, // ms
+    rewardFlag: 'nullbyteConfronted',
+    rewardAffinity: { who: 'family', val: 20 },
+    rewardDialogue: 'survivor_solved',
+  },
+};
+
+// ═══════════════════════════════════════════════════════════════
+//  ENDING CALCULATOR
+// ═══════════════════════════════════════════════════════════════
+/**
+ * Determines which ending the player receives based on total affinity.
+ * @param {object} affinityObj  – STATE.quest.affinity
+ * @returns {'true'|'normal'|'bad'}
+ */
+export function calculateEnding(affinityObj) {
+  const total = totalAffinity(affinityObj);
+  if (total >= 300) return 'true';
+  if (total >= 150) return 'normal';
+  return 'bad';
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  COMPANION BONUS CALCULATOR  (adds to combat stats)
+// ═══════════════════════════════════════════════════════════════
+/**
+ * Returns the cumulative stat bonuses from all recruited companions.
+ * @param {object} companionState  – STATE.quest.companions
+ */
+export function activeCompanionBonus(companionState) {
+  const bonus = { hp: 0, atk: 0, skill: 0 };
+  if (!companionState) return bonus;
+  for (const [id, c] of Object.entries(COMPANIONS)) {
+    if (companionState[id]?.recruited) {
+      bonus.hp    += c.hpBonus;
+      bonus.atk   += c.atkBonus;
+      bonus.skill += c.skillBonus;
+    }
+  }
+  return bonus;
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  NPC DIALOGUE ROUTER
+// ═══════════════════════════════════════════════════════════════
+/**
+ * Returns the dialogueId to display for a given NPC given current quest state and flags.
+ * Falls back to a simple text string when no rich dialogue is available.
+ * @param {string} npcId
+ * @param {object} questState  – STATE.quest
+ * @param {object} flags       – STATE.quest.flags
+ * @returns {string|null}  dialogueId from DIALOGUES, or null for generic handling
+ */
+export function dialogueForNpc(npcId, questState, flags) {
+  const f = flags || {};
+  switch (npcId) {
+    case 'mom_up':
+    case 'mom_down':
+      return f.greetedElder ? 'mom_wakeup_b' : 'mom_wakeup';
+
+    case 'elder':
+    case 'elder_hermit':
+      return f.greetedElder ? null : 'elder_first_meet'; // null→ use progressionDialogue fallback
+
+    case 'grom':
+      if (f.gromRecruited) return 'grom_awakening';
+      if (f.gromMet) return 'grom_recruit';
+      return 'grom_first_meet';
+
+    case 'slyx':
+      if (f.slyxRecruited) return 'slyx_awakening';
+      if (f.slyxMet) return 'slyx_recruit';
+      return 'slyx_first_meet';
+
+    case 'lumina':
+      if (f.luminaRecruited) return 'lumina_awakening';
+      if (f.luminaMet) return 'lumina_recruit';
+      return 'lumina_first_meet';
+
+    case 'elara':
+      if (f.elaraRecruited) return 'elara_awakening';
+      if (f.elaraMet) return 'elara_recruit';
+      return 'elara_first_meet';
+
+    case 'void_defector':
+      return f.voidCommanderDefeated ? null : 'nullbyte_approach'; // pre-boss lore hint
+
+    case 'nullbyte':
+      return 'nullbyte_approach';
+
+    default:
+      return null;
+  }
+}

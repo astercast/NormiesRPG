@@ -1,6 +1,11 @@
 import Phaser from 'phaser';
 import { connectWallet, loadWalletNormies, loadDemoNormies, detectWallets } from './wallet.js';
 import { makeDemoNormie, fetchNormieFull } from './normie-api.js';
+import {
+  CHAPTERS, COMPANIONS, DIALOGUES,
+  freshAffinity, freshFlags, gainAffinity, loseAffinity, totalAffinity, isAwakened,
+  calculateEnding, activeCompanionBonus, dialogueForNpc,
+} from './story.js';
 
 const bus = new Phaser.Events.EventEmitter();
 
@@ -99,9 +104,20 @@ const STATE = {
   },
   quest: {
     step: 0,
+    chapter: 1,
     kills: 0,
     eliteKills: 0,
     bossDefeated: false,
+    caveCleared: false,
+    voidCommanderDefeated: false,
+    affinity: freshAffinity(),
+    flags: freshFlags(),
+    companions: {
+      grom:   { recruited: false },
+      slyx:   { recruited: false },
+      lumina: { recruited: false },
+      elara:  { recruited: false },
+    },
     storyFlags: {},
   },
   meta: {
@@ -215,34 +231,69 @@ function leadNormie() {
   return STATE.party.roster.find((n) => n.id === STATE.party.leadId) || STATE.party.roster[0];
 }
 
+/**
+ * Renders a Normie pixel-string onto a canvas using flood-fill exterior detection
+ * so the full body is correctly filled (not just a 1px ring inside the outline).
+ * @param {string} pixels  40×40 bitmap string of '0'/'1'
+ * @param {number} size    output pixel size (should be a multiple of 40)
+ * @returns {HTMLCanvasElement}
+ */
+function buildNormiePortraitCanvas(pixels, size) {
+  const S = Math.max(1, Math.round((size || 120) / 40));
+  const W = 40, H = 40;
+  const cv = document.createElement('canvas');
+  cv.width = W * S; cv.height = H * S;
+  const ctx = cv.getContext('2d');
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  const px = typeof pixels === 'string' ? pixels : '';
+  if (px.length >= 1600) {
+    // BFS flood-fill from border edge-cells to find exterior (background) region
+    const outside = new Uint8Array(W * H);
+    const queue = [];
+    let qh = 0;
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        if ((y === 0 || y === H - 1 || x === 0 || x === W - 1) && px[y * W + x] !== '1') {
+          outside[y * W + x] = 1;
+          queue.push(y * W + x);
+        }
+      }
+    }
+    while (qh < queue.length) {
+      const idx = queue[qh++];
+      const iy = Math.floor(idx / W), ix = idx % W;
+      for (let d = 0; d < 4; d++) {
+        const nx = ix + (d === 0 ? -1 : d === 1 ? 1 : 0);
+        const ny = iy + (d === 2 ? -1 : d === 3 ? 1 : 0);
+        if (nx < 0 || nx >= W || ny < 0 || ny >= H) continue;
+        const ni = ny * W + nx;
+        if (outside[ni] || px[ni] === '1') continue;
+        outside[ni] = 1;
+        queue.push(ni);
+      }
+    }
+    // Interior '0' pixels = body fill
+    ctx.fillStyle = '#d8d8d8';
+    for (let y = 0; y < H; y++)
+      for (let x = 0; x < W; x++)
+        if (px[y * W + x] !== '1' && !outside[y * W + x])
+          ctx.fillRect(x * S, y * S, S, S);
+    // '1' pixels = dark outline / details
+    ctx.fillStyle = '#111111';
+    for (let y = 0; y < H; y++)
+      for (let x = 0; x < W; x++)
+        if (px[y * W + x] === '1') ctx.fillRect(x * S, y * S, S, S);
+  }
+  return cv;
+}
+
 function buildLeadNormieTexture() {
   return new Promise((resolve) => {
     if (!gameRef) { resolve(false); return; }
     const lead = leadNormie();
     const px = lead?.pixels || '';
     if (!px || px.length < 1600) { resolve(false); return; }
-
-    const S = 3; // 3px per normie pixel → 120×120, crisp at any zoom
-    const cv = document.createElement('canvas');
-    cv.width = 40 * S; cv.height = 40 * S;
-    const ctx = cv.getContext('2d');
-    ctx.clearRect(0, 0, cv.width, cv.height);
-    // White body fill first (the normie is a white NFT character)
-    ctx.fillStyle = '#e0e0e0';
-    for (let y = 0; y < 40; y++)
-      for (let x = 0; x < 40; x++)
-        if (px[y * 40 + x] !== '1') {
-          // Check if adjacent to a '1' pixel (edge of figure) — fill body area
-          const nb = (x > 0 && px[y*40+x-1]==='1') || (x < 39 && px[y*40+x+1]==='1') ||
-                     (y > 0 && px[(y-1)*40+x]==='1') || (y < 39 && px[(y+1)*40+x]==='1');
-          if (nb) ctx.fillRect(x * S, y * S, S, S);
-        }
-    // Draw dark outline/detail pixels
-    ctx.fillStyle = '#111111';
-    for (let y = 0; y < 40; y++)
-      for (let x = 0; x < 40; x++)
-        if (px[y * 40 + x] === '1') ctx.fillRect(x * S, y * S, S, S);
-
+    const cv = buildNormiePortraitCanvas(px, 120); // 40 × 3 = 120×120
     const img = new Image();
     img.onload = () => {
       if (!gameRef) { resolve(false); return; }
@@ -301,11 +352,9 @@ function skillValue() {
 }
 
 function questText() {
-  if (STATE.quest.step === 0) return 'Chapter I: Speak with Elder Vex.';
-  if (STATE.quest.step === 1) return `Chapter I: Defeat 2 wild enemies (${STATE.quest.kills}/2).`;
-  if (STATE.quest.step === 2) return `Chapter II: Defeat 1 elite enemy (${STATE.quest.eliteKills}/1).`;
-  if (STATE.quest.step === 3) return 'Chapter III: Defeat Abyss Warden in Null Ruins.';
-  return 'Epilogue: Explore, level up, and optimize your party build.';
+  const q = STATE.quest;
+  const ch = Math.min(q.chapter - 1, CHAPTERS.length - 1);
+  return CHAPTERS[ch].questText(q);
 }
 
 function updateWalletStatus(msg = null) {
@@ -438,13 +487,119 @@ function setOverlayLock(locked) {
 function showDialogue(name, text) {
   ui.dialogueName.textContent = name;
   ui.dialogueText.textContent = text;
+  // Remove any existing choice buttons
+  const existing = ui.dialogue.querySelector('.dialogue-choices');
+  if (existing) existing.remove();
   ui.dialogue.classList.remove('hidden');
   setOverlayLock(true);
 }
 
 function hideDialogue() {
+  const choiceEl = ui.dialogue.querySelector('.dialogue-choices');
+  if (choiceEl) choiceEl.remove();
   ui.dialogue.classList.add('hidden');
   if (!menuOpen && !shopOpen) setOverlayLock(false);
+}
+
+/**
+ * Display a branching dialogue from story.js DIALOGUES.
+ * Handles multi-line sequences and choice trees.
+ * @param {string} dialogueId
+ * @param {function} [onDone]  callback when fully completed
+ */
+function showBranchingDialogue(dialogueId, onDone) {
+  const entry = DIALOGUES[dialogueId];
+  if (!entry) {
+    if (onDone) onDone();
+    return;
+  }
+
+  const q = STATE.quest;
+  let lineIdx = 0;
+
+  function showLine() {
+    const line = entry.lines[lineIdx];
+    ui.dialogueName.textContent = entry.name;
+    ui.dialogueText.textContent = line;
+    const existing = ui.dialogue.querySelector('.dialogue-choices');
+    if (existing) existing.remove();
+    ui.dialogue.classList.remove('hidden');
+    setOverlayLock(true);
+
+    const isLast = lineIdx >= entry.lines.length - 1;
+    if (isLast && entry.choices?.length) {
+      // Build choice buttons instead of showing the close button
+      const wrap = document.createElement('div');
+      wrap.className = 'dialogue-choices';
+      entry.choices.forEach((choice) => {
+        const btn = document.createElement('button');
+        btn.className = 'dialogue-choice-btn';
+        btn.textContent = choice.label;
+        btn.addEventListener('click', () => {
+          // Apply affinity delta
+          if (choice.affinityDelta) {
+            gainAffinity(q.affinity, choice.affinityDelta.who, choice.affinityDelta.val);
+          }
+          // Apply flag sets
+          if (choice.flags) {
+            Object.assign(q.flags, choice.flags);
+            // Auto-recruit companion if flag set
+            const recruitMap = { gromRecruited:'grom', slyxRecruited:'slyx', luminaRecruited:'lumina', elaraRecruited:'elara' };
+            for (const [flag, cid] of Object.entries(recruitMap)) {
+              if (choice.flags[flag]) recruitCompanion(cid);
+            }
+          }
+          wrap.remove();
+          hideDialogue();
+          if (choice.next) {
+            showBranchingDialogue(choice.next, onDone);
+          } else {
+            if (onDone) onDone();
+          }
+        });
+        wrap.appendChild(btn);
+      });
+      ui.dialogue.appendChild(wrap);
+    } else {
+      // Normal next-line or close
+      ui.dialogueClose.onclick = () => {
+        lineIdx++;
+        if (lineIdx < entry.lines.length) {
+          showLine();
+        } else {
+          ui.dialogueClose.onclick = ui.dialogueClose._defaultClose;
+          hideDialogue();
+          if (onDone) onDone();
+        }
+      };
+    }
+  }
+
+  // Stash real close handler
+  if (!ui.dialogueClose._defaultClose) {
+    ui.dialogueClose._defaultClose = () => hideDialogue();
+  }
+
+  showLine();
+}
+
+/**
+ * Recruit a companion: mark recruited in STATE, add stat bonuses.
+ * @param {string} companionId
+ */
+function recruitCompanion(companionId) {
+  const c = COMPANIONS[companionId];
+  if (!c) return;
+  const cState = STATE.quest.companions[companionId];
+  if (!cState || cState.recruited) return;
+  cState.recruited = true;
+  // Apply permanent stat bonuses
+  STATE.player.baseHp    += c.hpBonus;
+  STATE.player.baseAtk   += c.atkBonus;
+  STATE.player.baseSkill += c.skillBonus;
+  STATE.player.hp = Math.min(STATE.player.hp + c.hpBonus, maxHp());
+  showToast(`${c.name} joined the party!`, 'reward');
+  updateHud();
 }
 
 function cloudPayload() {
@@ -467,6 +622,19 @@ function applyCloudPayload(data) {
   STATE.world = data.world;
   STATE.quest = data.quest;
   STATE.meta = data.meta || STATE.meta;
+
+  // Hydrate new fields that may be missing in older saves
+  STATE.quest.chapter          = STATE.quest.chapter          ?? 1;
+  STATE.quest.caveCleared      = STATE.quest.caveCleared      ?? false;
+  STATE.quest.voidCommanderDefeated = STATE.quest.voidCommanderDefeated ?? false;
+  STATE.quest.affinity         = STATE.quest.affinity         ?? freshAffinity();
+  STATE.quest.flags            = STATE.quest.flags            ?? freshFlags();
+  STATE.quest.companions       = STATE.quest.companions       ?? {
+    grom:   { recruited: false },
+    slyx:   { recruited: false },
+    lumina: { recruited: false },
+    elara:  { recruited: false },
+  };
 
   applyLeadNormieStats();
   buildLeadNormieTexture();
@@ -522,23 +690,24 @@ function renderPartyMenu() {
 
   STATE.party.roster.forEach((n) => {
     const isLead = lead?.id === n.id;
-    const initial = (n.name || '#?').replace(/^Normie /,'').slice(0,3);
+    const portrait = buildNormiePortraitCanvas(n.pixels || '', 40).toDataURL();
+    const skills = [n.sk1, n.sk2, n.sk3].filter(Boolean).join(' / ') || '—';
+    const extras = [n.expression, n.accessory !== 'No Accessories' ? n.accessory : null].filter(Boolean).join(' · ');
     rows.push(`
-      <div class="party-card">
-        <div class="party-card-avatar">${initial}</div>
+      <div class="party-card${isLead ? ' party-card--lead' : ''}">
+        <img src="${portrait}" width="40" height="40" class="nc-portrait" alt="${n.name}">
         <div class="party-card-info">
-          <div class="party-card-name">${n.name}</div>
-          <div class="party-card-sub">${n.type} &nbsp;&middot;&nbsp; HP ${n.maxHp} &nbsp;&middot;&nbsp; ATK ${n.atkBasic}</div>
+          <div class="party-card-name">${n.name}${isLead ? ' <span class="party-card-badge">LEAD</span>' : ''}</div>
+          <div class="party-card-sub">${n.type}${extras ? ' &middot; ' + extras : ''}</div>
+          <div class="party-card-sub">HP&thinsp;${n.maxHp} &middot; ATK&thinsp;${n.atkBasic} &middot; SKL&thinsp;${n.atkSkill} &middot; CRIT&thinsp;${Math.round((n.crit||0)*100)}%</div>
+          <div class="party-card-sub">${skills}</div>
         </div>
-        ${isLead
-          ? '<span class="party-card-badge">LEAD</span>'
-          : `<button class="party-set-lead" data-lead="${n.id}">Set Lead</button>`
-        }
+        ${!isLead ? `<button class="party-set-lead" data-lead="${n.id}">Lead</button>` : ''}
       </div>`);
   });
 
   for (let i = STATE.party.roster.length; i < 5; i++) {
-    rows.push(`<div class="party-slot-empty">Slot ${i+1} &mdash; empty</div>`);
+    rows.push(`<div class="party-slot-empty">Slot ${i + 1} — empty &middot; recruit companions in-world</div>`);
   }
 
   ui.partyBody.innerHTML = rows.join('');
@@ -765,49 +934,110 @@ function dropLootForTier(tier) {
 
 function progressionDialogue(npcId) {
   const q = STATE.quest;
+  // Companion NPCs always use branching dialogue
+  const companionIds = ['grom', 'slyx', 'lumina', 'elara'];
+  if (companionIds.includes(npcId)) {
+    const dlgId = dialogueForNpc(npcId, q, q.flags);
+    if (dlgId) showBranchingDialogue(dlgId);
+    return null; // caller should not call showDialogue when null returned
+  }
+
+  // Rich dialogue for story NPCs
+  const dlgOverride = dialogueForNpc(npcId, q, q.flags);
+  if (dlgOverride) {
+    showBranchingDialogue(dlgOverride);
+    return null;
+  }
+
+  // Fallback text for elder, scout, smith, merchant
   if (npcId === 'elder') {
-    if (q.step === 0) return 'The Grid is splintering. Start with two field wins, then report back stronger.';
-    if (q.step === 1) return 'Stay calm and finish two wins. You are almost ready for chapter two.';
-    if (q.step === 2) return 'Excellent. Hunt one elite foe in the highlands to prove mastery.';
-    if (q.step === 3) return 'All roads point to the Null Ruins. Defeat Abyss Warden.';
-    return 'You did it, champion. Keep training your Normies for future expansions.';
+    if (q.step === 0) {
+      // Trigger full elder dialogue on first meet
+      STATE.quest.step = 1;
+      showBranchingDialogue('elder_first_meet');
+      return null;
+    }
+    if (q.chapter < 3) return 'Keep fighting, Normie. The void loses ground one pixel at a time.';
+    if (q.chapter === 3) return 'The Cave of First Bits holds the Render Key. The Guardian blocks your path.';
+    if (q.chapter === 4) return 'Beyond the cave — the Corrupted Lands and the Void Commander.';
+    return 'You stand at the edge of legend. The Citadel awaits. End NULLBYTE.';
   }
   if (npcId === 'scout') {
-    if (q.step < 2) return 'You can force quick wins in plains. Fights are shorter now by design.';
-    if (q.step === 2) return 'Elites roam deep fields and ruins edge. One elite kill unlocks the boss phase.';
-    return 'Boss is in the ruins center. Keep one potion for phase pressure.';
+    if (q.chapter < 2) return 'Void scouts patrol the eastern fields. Stay mobile and hit fast.';
+    if (q.chapter === 2) return 'Elite void units are in the Dark Margins. Hit hard or they regenerate.';
+    return 'Beyond the cave is void country proper. The Commander is brutal — Elara\'s healing mandatory.';
   }
-  if (npcId === 'smith') return 'Gear spikes your build. Equip from menu after each drop for huge power jumps.';
-  return 'Need goods? My prices are tuned for fast progression, no long grind.';
+  if (npcId === 'smith' || npcId === 'blacksmith') {
+    return 'New weapon stocks arrived from the last clear-team raid. Gear up before the cave.';
+  }
+  return 'Trade fast, travel faster. The void doesn\'t wait for negotiations.';
 }
 
 function grantVictory(data) {
   const p = STATE.player;
+  const q = STATE.quest;
   p.gold += data.gold;
   p.exp += data.exp;
   STATE.meta.wins += 1;
 
   if (!data.isBoss) {
-    STATE.quest.kills += 1;
-    if (data.tier >= 2) STATE.quest.eliteKills += 1;
+    q.kills += 1;
+    if (data.tier >= 2) q.eliteKills += 1;
+    // Affinity boost for every combat win with a companion present
+    const recruited = Object.entries(q.companions).filter(([, c]) => c.recruited).map(([id]) => id);
+    recruited.forEach((id) => gainAffinity(q.affinity, id, 2));
   }
 
-  if (STATE.quest.step === 1 && STATE.quest.kills >= 2) {
-    STATE.quest.step = 2;
+  // ── Chapter progression — Pixel War arc ────────────────────────
+  // Ch.I → Ch.II: defeat 2 wild enemies
+  if (q.chapter === 1 && q.kills >= 2) {
+    q.chapter = 2;
+    q.step = 2;
     p.gold += 35;
     p.potions += 1;
-    showDialogue('Chapter II', 'Wild phase complete. Bonus 35G and +1 potion awarded. Defeat one elite foe next.');
-  } else if (STATE.quest.step === 2 && STATE.quest.eliteKills >= 1) {
-    STATE.quest.step = 3;
-    p.gold += 60;
-    showDialogue('Chapter III', 'Elite target down. Abyss Warden is now vulnerable in Null Ruins.');
+    showDialogue('The Pixel War — Ch.II', 'The Render Fields hold for now. Seek allies in the static. Grom is somewhere in the Dark Margins.');
   }
 
-  if (data.isBoss) {
-    STATE.quest.step = 4;
-    STATE.quest.bossDefeated = true;
-    p.gold += 120;
-    showDialogue('Epilogue', 'Abyss Warden is defeated. The realm stabilizes and your party enters legend.');
+  // Ch.II → Ch.III: defeat 1 elite unit
+  if (q.chapter === 2 && q.eliteKills >= 1) {
+    q.chapter = 3;
+    q.step = 3;
+    p.gold += 60;
+    showDialogue('The Pixel War — Ch.III', 'Elite void unit destroyed. The Cave of First Bits lies ahead. Find the Render Key.');
+  }
+
+  // Cave cleared (boss tier 3 in cave map context)
+  if (data.isBoss && q.chapter === 3 && !q.caveCleared) {
+    q.caveCleared = true;
+    q.chapter = 4;
+    q.step = 4;
+    q.flags.caveCleared = true;
+    q.flags.renderKeyObtained = true;
+    p.gold += 90;
+    p.potions += 2;
+    showDialogue('The Pixel War — Ch.IV', 'Cave Guardian defeated. The Render Key is yours. The Corrupted Lands stretch beyond.');
+  }
+
+  // Void Commander down
+  if (data.isBoss && q.chapter === 4 && !q.voidCommanderDefeated) {
+    q.voidCommanderDefeated = true;
+    q.chapter = 5;
+    q.step = 5;
+    q.flags.voidCommanderDefeated = true;
+    p.gold += 110;
+    showDialogue('The Pixel War — Ch.V', 'Void Commander defeated. The Citadel gates are open. NULLBYTE awaits at the core.');
+  }
+
+  // Final boss — NULLBYTE
+  if (data.isBoss && q.chapter === 5 && !q.bossDefeated) {
+    q.bossDefeated = true;
+    q.flags.nullbyteConfronted = true;
+    q.totalAffinity = totalAffinity(q.affinity);
+    p.gold += 200;
+    const ending = calculateEnding(q.affinity);
+    // Show the right ending dialogue
+    const endingDlgId = ending === 'true' ? 'ending_true' : ending === 'normal' ? 'ending_normal' : 'ending_bad';
+    showBranchingDialogue(endingDlgId);
   }
 
   while (p.exp >= p.expToLevel) {
@@ -832,7 +1062,7 @@ function grantVictory(data) {
   if (drop) {
     addGearToInventory(drop);
     showToast(itemById(drop).name, 'loot');
-    showDialogue('Loot', `${itemById(drop).name} dropped. Open inventory (I) and equip it.`);
+    showDialogue('Loot', `${itemById(drop).name} dropped. Open inventory (I) to equip it.`);
   }
 
   updateHud();
@@ -907,7 +1137,7 @@ const MAP_DEFS = {
     ground: buildOverworldMap(),
     spawn: { spawn_main: { col: 36, row: 36 }, from_town: { col: 30, row: 40 }, from_ruins: { col: 50, row: 28 } },
     warps:     [{ col: 28, row: 38, cols: 4, rows: 4, targetMap: 'town', targetSpawn: 'from_overworld' }, { col: 55, row: 25, cols: 4, rows: 4, targetMap: 'ruins', targetSpawn: 'from_overworld' }],
-    npcs:      [],
+    npcs:      [{ id: 'grom', col: 22, row: 20 }, { id: 'slyx', col: 42, row: 15 }],
     encounters: [{ col: 10, row: 10, cols: 20, rows: 20, chance: 0.13, tier: 1 }, { col: 42, row: 10, cols: 20, rows: 20, chance: 0.18, tier: 2 }, { col: 10, row: 42, cols: 20, rows: 20, chance: 0.18, tier: 2 }, { col: 42, row: 42, cols: 20, rows: 20, chance: 0.22, tier: 3 }],
     bosses:    [],
   },
@@ -916,7 +1146,7 @@ const MAP_DEFS = {
     ground: buildRuinsMap(),
     spawn: { from_overworld: { col: 18, row: 18 } },
     warps:     [{ col: 15, row: 34, cols: 6, rows: 2, targetMap: 'overworld', targetSpawn: 'from_ruins' }],
-    npcs:      [],
+    npcs:      [{ id: 'lumina', col: 8, row: 8 }, { id: 'elara', col: 28, row: 28 }],
     encounters: [{ col: 5, row: 5, cols: 26, rows: 26, chance: 0.22, tier: 3 }],
     bosses:    [{ col: 16, row: 15, cols: 4, rows: 4, bossId: 'abyss_warden' }],
   },
@@ -1300,9 +1530,10 @@ class OverworldScene extends Phaser.Scene {
     if (spawnData) this.player.setPosition(spawnData.col * 32 + 16, spawnData.row * 32 + 16);
 
     mdef.npcs.forEach(({ id, col, row }) => {
-      const npcData = NPCS[id] || NPCS.elder;
+      const npcData = NPCS[id] || (COMPANIONS[id] ? { name: COMPANIONS[id].name } : NPCS.elder);
       const spr = this.add.sprite(col * 32 + 16, row * 32 + 16, ART_KEYS.npc, 0).setScale(1.5).setDepth(9);
       spr.anims.play('npc-idle', true);
+      if (COMPANIONS[id]) spr.setTint(COMPANIONS[id].color);
       this.npcs.push({ id, data: npcData, sprite: spr });
     });
 
@@ -1375,13 +1606,29 @@ class OverworldScene extends Phaser.Scene {
       const d = Phaser.Math.Distance.Between(px, py, npc.sprite.x, npc.sprite.y);
       if (d < 94) {
         if (npc.id === 'merchant') {
-          showDialogue(npc.data.name, progressionDialogue('merchant'));
+          showDialogue(npc.data.name, 'Trade fast, travel faster. The void doesn\'t wait.');
           openShop();
           return;
         }
 
-        if (npc.id === 'elder' && STATE.quest.step === 0) STATE.quest.step = 1;
-        showDialogue(npc.data.name, progressionDialogue(npc.id));
+        // Companion NPCs: always use branching dialogue
+        const companionIds = ['grom', 'slyx', 'lumina', 'elara'];
+        if (companionIds.includes(npc.id)) {
+          const dlgId = dialogueForNpc(npc.id, STATE.quest, STATE.quest.flags);
+          if (dlgId) { showBranchingDialogue(dlgId); return; }
+        }
+
+        // Story NPCs with branching override
+        const override = dialogueForNpc(npc.id, STATE.quest, STATE.quest.flags);
+        if (override) {
+          showBranchingDialogue(override);
+          bus.emit('hud-refresh');
+          return;
+        }
+
+        // Fallback text
+        const text = progressionDialogue(npc.id);
+        if (text) showDialogue(npc.data.name, text);
         bus.emit('hud-refresh');
         return;
       }
@@ -1487,7 +1734,7 @@ class BattleScene extends Phaser.Scene {
     this.add.rectangle(w * 0.5, h * 0.5, w, h, 0x04090b, 0.42);
 
     const heroKey = leadAvatarKey();
-    this.heroSprite = this.add.sprite(w * 0.28, h * 0.55, heroKey, 0).setScale(heroKey === LEAD_NORMIE_TEXTURE_KEY ? 3.2 : 4.2).setDepth(2);
+    this.heroSprite = this.add.sprite(w * 0.28, h * 0.55, heroKey, 0).setScale(heroKey === LEAD_NORMIE_TEXTURE_KEY ? 1.1 : 4.2).setDepth(2);
     if (heroKey === ART_KEYS.player) {
       this.heroSprite.anims.play('player-right', true);
       this.heroSprite.setTint(tintFromLead());
@@ -1737,7 +1984,13 @@ async function launchDemoMode() {
   exitLaunchOverlay();
 }
 
-ui.dialogueClose.addEventListener('click', hideDialogue);
+ui.dialogueClose.addEventListener('click', () => {
+  if (typeof ui.dialogueClose.onclick === 'function') {
+    ui.dialogueClose.onclick();
+  } else {
+    hideDialogue();
+  }
+});
 ui.menuClose.addEventListener('click', closeMenu);
 ui.shopClose.addEventListener('click', closeShop);
 ui.btnSaveCloud.addEventListener('click', saveCloud);

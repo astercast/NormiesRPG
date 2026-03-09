@@ -204,6 +204,18 @@ button{
 .dlg-prompt{font-size:8px;color:#aaa;letter-spacing:.1em;animation:blink 1.2s step-end infinite}
 @keyframes blink{50%{opacity:0}}
 
+/* ── DIALOGUE CHOICES */
+.dialogue-choices{
+  display:flex;flex-direction:column;gap:5px;padding:8px 16px 12px;border-top:1px solid #ddd;
+}
+.dialogue-choice-btn{
+  display:block;width:100%;text-align:left;
+  background:#e3e5e4;border:1px solid #48494b;
+  font-family:inherit;font-size:10px;letter-spacing:.04em;
+  padding:7px 12px;cursor:pointer;transition:background .12s;
+}
+.dialogue-choice-btn:hover{background:#d0d2d1;}
+
 /* ── OVERLAY */
 .overlay{position:absolute;inset:0;background:#e3e5e4;z-index:30;overflow-y:auto;-webkit-overflow-scrolling:touch}
 
@@ -284,8 +296,17 @@ button{
 .q-lore{font-size:8px;color:#8a8b8a;font-style:italic;line-height:1.7;margin-bottom:6px}
 .q-steps{font-size:9px;color:#8a8b8a;line-height:1.9}
 .q-empty{padding:32px;text-align:center;color:#bbb;font-size:10px}
-.party-card{display:flex;gap:12px;border:1px solid #eee;padding:10px 12px;margin-bottom:8px}
+.party-card{display:flex;gap:12px;border:1px solid #eee;padding:10px 12px;margin-bottom:8px;align-items:flex-start}
 .party-card canvas{image-rendering:pixelated;flex-shrink:0}
+.party-card--lead{border-color:#48494b}
+.nc-portrait{image-rendering:pixelated;flex-shrink:0;display:block;border:1px solid #ddd}
+.party-card-info{flex:1;min-width:0}
+.party-card-name{font-size:10px;font-weight:700;margin-bottom:3px}
+.party-card-sub{font-size:8px;color:#8a8b8a;line-height:1.7}
+.party-card-badge{font-size:7px;background:#111;color:#e3e5e4;padding:1px 5px;letter-spacing:.1em;vertical-align:middle;margin-left:4px}
+.party-set-lead{font-family:inherit;font-size:8px;background:transparent;border:1px solid #48494b;padding:4px 8px;cursor:pointer;flex-shrink:0;align-self:center;letter-spacing:.05em;margin-left:auto}
+.party-set-lead:hover{background:#48494b;color:#e3e5e4}
+.party-slot-empty{font-size:9px;color:#aaa;padding:10px 12px;border:1px dashed #ddd;margin-bottom:6px;text-align:center}
 .pc-info{flex:1;min-width:0}
 .pc-name{font-size:10px;font-weight:700}.pc-type{font-size:8px;color:#8a8b8a}.pc-level{font-size:8px;color:#8a8b8a;margin-top:2px}.pc-acc{font-size:8px;color:#8a8b8a}.pc-stats{font-size:8px;color:#48494b;margin-top:4px;line-height:1.9}.pc-moves{font-size:8px;color:#8a8b8a;margin-top:2px}
 .journal-entry{font-size:9px;color:#8a8b8a;line-height:1.9;padding:6px 0;border-bottom:1px solid #f0f0f0}

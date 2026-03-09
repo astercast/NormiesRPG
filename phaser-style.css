@@ -1239,6 +1239,53 @@ body.prelaunch .mobile-btns {
 .launch-card { position: relative; z-index: 2; }
 
 /* ================================================================
+   DIALOGUE CHOICES (branching story options)
+   ================================================================ */
+.dialogue-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 10px 0 0;
+  margin-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.dialogue-choice-btn {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  padding: 10px 14px;
+  cursor: pointer;
+  transition: background 100ms, border-color 100ms;
+}
+.dialogue-choice-btn:hover {
+  background: #2e2e2c;
+  border-color: var(--border-hi);
+}
+
+/* ================================================================
+   PARTY CARD — LEAD MARKER + PORTRAIT
+   ================================================================ */
+.party-card--lead {
+  border-color: var(--border-hi);
+}
+
+.nc-portrait {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  flex-shrink: 0;
+  display: block;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+/* ================================================================
    RESPONSIVE
    ================================================================ */
 @media (max-width: 540px) {
