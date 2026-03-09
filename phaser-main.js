@@ -1,7 +1,6 @@
 import Phaser from 'phaser';
 import { connectWallet, loadWalletNormies, loadDemoNormies, detectWallets } from './wallet.js';
 import { makeDemoNormie, fetchNormieFull } from './normie-api.js';
-import kenneyTilesUrl from './assets/art/tileset/kenney_mono_packed.png';
 
 const bus = new Phaser.Events.EventEmitter();
 
@@ -714,38 +713,67 @@ function tintFromLead() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MAP DEFINITIONS — inline JS, no external JSON files.
-// Tile value key (0-indexed frame in buildTileCanvas 4×4 atlas):
-//   0  = overworld ground (grey-blue)     3  = dark wall (impassable)
-//   4  = town floor (blue-grey)            8  = ruins floor (very dark)
-// All maps share: border = tile 3 (dark wall), setCollisionBetween(3,3).
+// TILE CONSTANTS — indices into the buildRpgTileset() 8×8 (16 px) atlas.
+// TID.WALL (3) is the ONLY collision tile — setCollisionBetween(3,3).
 // ─────────────────────────────────────────────────────────────────────────────
-function buildMapGround(w, h, floorId) {
-  const rng = (x, y) => (((x * 73856093) ^ (y * 19349663)) >>> 0);
-  return Array.from({ length: h }, (_, y) =>
-    Array.from({ length: w }, (_, x) => {
-      if (x === 0 || x === w - 1 || y === 0 || y === h - 1) return 3;
-      const v = rng(x, y) % 20;
-      if (v < 2) return floorId + 1;
-      if (v < 4) return floorId + 2;
-      return floorId;
-    })
-  );
+const TID = { VOID: 0, GRASS: 1, PATH: 2, WALL: 3, FLOOR: 4, DARK: 5, RUINS: 6, WATER: 7 };
+
+function fillBlock(map, x1, y1, x2, y2, wallId, inId) {
+  for (let y = y1; y <= y2; y++)
+    for (let x = x1; x <= x2; x++)
+      map[y][x] = (y === y1 || y === y2 || x === x1 || x === x2) ? wallId : inId;
+}
+
+function buildTownMap() {
+  const W = 36, H = 30;
+  const map = Array.from({ length: H }, () => Array(W).fill(TID.FLOOR));
+  for (let x = 0; x < W; x++) { map[0][x] = TID.WALL; map[H-1][x] = TID.WALL; }
+  for (let y = 0; y < H; y++) { map[y][0] = TID.WALL; map[y][W-1] = TID.WALL; }
+  for (let x = 15; x <= 20; x++) map[H-1][x] = TID.PATH; // south exit gap
+  for (let x = 1; x < W-1; x++) { map[14][x] = TID.PATH; map[15][x] = TID.PATH; } // E-W road
+  for (let y = 1; y < H-1; y++) { map[y][17] = TID.PATH; map[y][18] = TID.PATH; } // N-S road
+  fillBlock(map,  2,  2, 14, 11, TID.WALL, TID.DARK); // NW building
+  fillBlock(map, 21,  2, 33, 11, TID.WALL, TID.DARK); // NE building
+  fillBlock(map,  2, 18, 14, 27, TID.WALL, TID.DARK); // SW building
+  fillBlock(map, 21, 18, 33, 27, TID.WALL, TID.DARK); // SE building
+  return map;
+}
+
+function buildOverworldMap() {
+  const W = 72, H = 72;
+  const map = Array.from({ length: H }, () => Array(W).fill(TID.GRASS));
+  for (let x = 0; x < W; x++) { map[0][x] = TID.WALL; map[H-1][x] = TID.WALL; }
+  for (let y = 0; y < H; y++) { map[y][0] = TID.WALL; map[y][W-1] = TID.WALL; }
+  for (let x = 1; x < W-1; x++) { map[36][x] = TID.PATH; map[37][x] = TID.PATH; } // E-W road
+  for (let y = 1; y < H-1; y++) { map[y][30] = TID.PATH; map[y][31] = TID.PATH; } // N-S road
+  for (let x = 30; x <= 57; x++) { map[26][x] = TID.PATH; map[27][x] = TID.PATH; } // branch to ruins
+  return map;
+}
+
+function buildRuinsMap() {
+  const W = 36, H = 36;
+  const map = Array.from({ length: H }, () => Array(W).fill(TID.RUINS));
+  for (let x = 0; x < W; x++) { map[0][x] = TID.WALL; map[H-1][x] = TID.WALL; }
+  for (let y = 0; y < H; y++) { map[y][0] = TID.WALL; map[y][W-1] = TID.WALL; }
+  for (let py = 4; py < H-4; py += 8)   // pillar columns every 8 tiles
+    for (let px = 4; px < W-4; px += 8)
+      fillBlock(map, px, py, px+1, py+1, TID.WALL, TID.WALL);
+  return map;
 }
 
 const MAP_DEFS = {
   town: {
     w: 36, h: 30,
-    ground: buildMapGround(36, 30, 4),
+    ground: buildTownMap(),
     spawn: { from_overworld: { col: 18, row: 14 } },
     warps:     [{ col: 15, row: 28, cols: 6, rows: 2, targetMap: 'overworld', targetSpawn: 'from_town' }],
-    npcs:      [{ id: 'elder', col: 8, row: 8 }, { id: 'smith', col: 26, row: 8 }, { id: 'merchant', col: 22, row: 18 }, { id: 'scout', col: 12, row: 18 }],
+    npcs:      [{ id: 'elder', col: 8, row: 12 }, { id: 'smith', col: 26, row: 12 }, { id: 'merchant', col: 8, row: 17 }, { id: 'scout', col: 26, row: 17 }],
     encounters: [],
     bosses:    [],
   },
   overworld: {
     w: 72, h: 72,
-    ground: buildMapGround(72, 72, 0),
+    ground: buildOverworldMap(),
     spawn: { spawn_main: { col: 36, row: 36 }, from_town: { col: 30, row: 40 }, from_ruins: { col: 50, row: 28 } },
     warps:     [{ col: 28, row: 38, cols: 4, rows: 4, targetMap: 'town', targetSpawn: 'from_overworld' }, { col: 55, row: 25, cols: 4, rows: 4, targetMap: 'ruins', targetSpawn: 'from_overworld' }],
     npcs:      [],
@@ -754,7 +782,7 @@ const MAP_DEFS = {
   },
   ruins: {
     w: 36, h: 36,
-    ground: buildMapGround(36, 36, 8),
+    ground: buildRuinsMap(),
     spawn: { from_overworld: { col: 18, row: 18 } },
     warps:     [{ col: 15, row: 34, cols: 6, rows: 2, targetMap: 'overworld', targetSpawn: 'from_ruins' }],
     npcs:      [],
@@ -765,45 +793,85 @@ const MAP_DEFS = {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Procedural texture builders — pure DOM canvas, no Phaser API.
-// Converted to data-URLs and fed into load.image / load.spritesheet so Phaser
-// handles the full WebGL upload pipeline (the only reliable cross-GPU path).
+// All returned as data-URLs fed into load.image / load.spritesheet.
 // ─────────────────────────────────────────────────────────────────────────────
-function buildTileCanvas() {
+function buildRpgTileset() {
+  const SZ = 16;
   const cv = document.createElement('canvas');
-  cv.width = 128; cv.height = 128;
-  const ctx = cv.getContext('2d');
-  const S = 32;
-  const tile = (tx, ty, base, detail, grid) => {
-    const x = tx * S; const y = ty * S;
-    ctx.fillStyle = base; ctx.fillRect(x, y, S, S);
-    if (detail) {
-      ctx.fillStyle = detail;
-      for (let dy = 4; dy < S - 4; dy += 8)
-        for (let dx = 4; dx < S - 4; dx += 8)
-          ctx.fillRect(x + dx, y + dy, 2, 2);
-    }
-    if (grid) {
-      ctx.fillStyle = grid;
-      ctx.fillRect(x, y + S - 1, S, 1);
-      ctx.fillRect(x + S - 1, y, 1, S);
-    }
-  };
-  tile(0, 0, '#b4bec0', '#c8d2d4', '#9eaaac'); // ID 1 – overworld ground
-  tile(1, 0, '#8a989c', '#9aacb0', '#7a8890');
-  tile(2, 0, '#6a7478', '#7a8488', '#5a666a');
-  tile(3, 0, '#2a3038', '#343c44', '#1e262e');
-  tile(0, 1, '#c0cac8', '#d0d8d6', '#a8b4b2'); // ID 5 – town ground
-  tile(1, 1, '#848e8c', '#949e9c', '#747e7c');
-  tile(2, 1, '#484e54', '#585e64', '#383e44');
-  tile(3, 1, '#dce4e4', '#eaf0f0', '#c8d0d0');
-  tile(0, 2, '#1a2028', '#242a32', '#121820');
-  tile(1, 2, '#243038', '#2e3c44', '#18242c');
-  tile(2, 2, '#303840', '#3c444c', '#242c34');
-  tile(3, 2, '#3c4450', '#48505c', '#30383c');
-  tile(0, 3, '#18242e', '#204050', '#101c24');
-  tile(1, 3, '#204858', '#286070', '#18404e');
-  tile(2, 3, '#10181e', '#181e26', '#0c1016');
-  tile(3, 3, '#e8e8e8', '#f4f4f4', '#cccccc');
+  cv.width = 128; cv.height = 128; // 8×8 grid of 16×16 tiles
+  const c = cv.getContext('2d');
+  const t = (tx, ty, fn) => { c.save(); c.translate(tx * SZ, ty * SZ); fn(); c.restore(); };
+
+  // 0 – VOID
+  t(0, 0, () => { c.fillStyle = '#0d0d0d'; c.fillRect(0, 0, SZ, SZ); });
+
+  // 1 – GRASS (light with scattered dark marks)
+  t(1, 0, () => {
+    c.fillStyle = '#dedede'; c.fillRect(0, 0, SZ, SZ);
+    c.fillStyle = '#2a2a2a';
+    [[1,2],[5,0],[8,3],[12,1],[15,5],[2,7],[6,5],[10,6],[14,9],
+     [0,11],[3,13],[7,10],[11,13],[4,14],[9,12],[13,8],[1,15]].forEach(([x,y]) => c.fillRect(x,y,1,2));
+    c.fillStyle = '#161616';
+    [[3,4],[9,8],[14,3],[5,11]].forEach(([x,y]) => c.fillRect(x,y,1,1));
+  });
+
+  // 2 – COBBLESTONE PATH (staggered brick pattern)
+  t(2, 0, () => {
+    c.fillStyle = '#b5b5b5'; c.fillRect(0, 0, SZ, SZ);
+    c.fillStyle = '#606060';
+    c.fillRect(0, 0, SZ, 1); c.fillRect(0, 7, SZ, 1); c.fillRect(0, SZ-1, SZ, 1);
+    c.fillRect(7, 1, 1, 6); c.fillRect(3, 8, 1, 7); c.fillRect(11, 8, 1, 7);
+    c.fillStyle = '#d4d4d4';
+    c.fillRect(1, 1, 5, 5); c.fillRect(9, 1, 6, 5);
+    c.fillRect(1, 8, 1, 6); c.fillRect(4, 8, 6, 6); c.fillRect(12, 8, 3, 6);
+  });
+
+  // 3 – WALL (collision | dark brick, lit-from-above highlight)
+  t(3, 0, () => {
+    c.fillStyle = '#1a1a1a'; c.fillRect(0, 0, SZ, SZ);
+    c.fillStyle = '#707070'; c.fillRect(0, 0, SZ, 1);
+    c.fillStyle = '#383838'; c.fillRect(0, 1, SZ, 1);
+    c.fillStyle = '#222';
+    c.fillRect(0, 5, SZ, 1); c.fillRect(0, 10, SZ, 1);
+    c.fillRect(7, 0, 1, 5); c.fillRect(3, 6, 1, 4); c.fillRect(11, 6, 1, 4); c.fillRect(7, 11, 1, 5);
+  });
+
+  // 4 – TOWN FLOOR (light stone slab with raised checkerboard faces)
+  t(4, 0, () => {
+    c.fillStyle = '#cdcdcd'; c.fillRect(0, 0, SZ, SZ);
+    c.fillStyle = '#999'; c.fillRect(0, 0, SZ, 1); c.fillRect(0, 0, 1, SZ);
+    c.fillStyle = '#e8e8e8'; c.fillRect(1, 1, SZ-1, SZ-1);
+    c.fillStyle = '#f2f2f2'; c.fillRect(1, 1, 6, 6); c.fillRect(9, 9, 6, 6);
+    c.fillStyle = '#dcdcdc'; c.fillRect(9, 1, 6, 6); c.fillRect(1, 9, 6, 6);
+  });
+
+  // 5 – DARK FLOOR (building interiors)
+  t(5, 0, () => {
+    c.fillStyle = '#484848'; c.fillRect(0, 0, SZ, SZ);
+    c.fillStyle = '#2e2e2e'; c.fillRect(0, 0, SZ, 1); c.fillRect(0, 0, 1, SZ);
+    c.fillStyle = '#545454'; c.fillRect(1, 1, SZ-1, SZ-1);
+    c.fillStyle = '#5e5e5e'; c.fillRect(1, 1, 6, 6); c.fillRect(9, 9, 6, 6);
+    c.fillStyle = '#4e4e4e'; c.fillRect(9, 1, 6, 6); c.fillRect(1, 9, 6, 6);
+  });
+
+  // 6 – RUINS FLOOR (very dark cracked stone)
+  t(6, 0, () => {
+    c.fillStyle = '#202020'; c.fillRect(0, 0, SZ, SZ);
+    c.fillStyle = '#484848';
+    c.fillRect(2, 1, 1, 5); c.fillRect(3, 5, 4, 1); c.fillRect(6, 5, 1, 3);
+    c.fillRect(10, 9, 1, 5); c.fillRect(11, 9, 4, 1); c.fillRect(14, 3, 1, 4); c.fillRect(12, 6, 3, 1);
+    c.fillStyle = '#181818'; c.fillRect(0, 0, SZ, 1); c.fillRect(0, 0, 1, SZ);
+  });
+
+  // 7 – WATER (deep dark with wave highlights)
+  t(7, 0, () => {
+    c.fillStyle = '#0a1212'; c.fillRect(0, 0, SZ, SZ);
+    c.fillStyle = '#203030';
+    [[0,3],[4,3],[8,3],[12,3],[0,11],[4,11],[8,11],[12,11]].forEach(([x,y]) => c.fillRect(x,y,3,1));
+    c.fillStyle = '#162424';
+    [[2,7],[6,7],[10,7],[14,7]].forEach(([x,y]) => c.fillRect(x,y,3,1));
+  });
+
   return cv;
 }
 
@@ -813,30 +881,41 @@ function buildPlayerCanvas() {
   const ctx = cv.getContext('2d');
   const drawFrame = (col, row, legL = 0, legR = 0) => {
     const x = col * 32; const y = row * 32;
-    ctx.fillStyle = 'rgba(0,0,0,0.28)'; ctx.fillRect(x + 10, y + 29, 12, 2);
-    ctx.fillStyle = '#8090a0';
-    ctx.fillRect(x + 12, y + 22, 4, 7 + legL);
-    ctx.fillRect(x + 16, y + 22, 4, 7 + legR);
-    ctx.fillStyle = '#404850';
-    ctx.fillRect(x + 12, y + 26 + legL, 4, 3);
-    ctx.fillRect(x + 16, y + 26 + legR, 4, 3);
-    ctx.fillStyle = '#1e242a'; ctx.fillRect(x + 9,  y + 11, 14, 12);
-    ctx.fillStyle = '#606870'; ctx.fillRect(x + 10, y + 12, 12, 10);
-    ctx.fillStyle = '#8090a0'; ctx.fillRect(x + 11, y + 13,  4,  4);
-    ctx.fillStyle = '#606870';
-    ctx.fillRect(x + 6,  y + 12, 4, 6);
-    ctx.fillRect(x + 22, y + 12, 4, 6);
-    ctx.fillStyle = '#1e242a'; ctx.fillRect(x + 10, y + 3, 12, 10);
-    ctx.fillStyle = '#d4d8dc'; ctx.fillRect(x + 11, y + 4, 10,  8);
-    ctx.fillStyle = '#1a2028'; ctx.fillRect(x + 11, y + 6, 10,  3);
-    ctx.fillStyle = '#c8e8ff';
-    ctx.fillRect(x + 12, y + 7, 3, 1);
-    ctx.fillRect(x + 17, y + 7, 3, 1);
+    // shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.2)'; ctx.fillRect(x+10, y+30, 12, 2);
+    // legs
+    ctx.fillStyle = '#1e1e1e';
+    ctx.fillRect(x+11, y+21, 5, 8 + Math.max(0,  legL));
+    ctx.fillRect(x+17, y+21, 5, 8 + Math.max(0,  legR));
+    // boots
+    ctx.fillStyle = '#0f0f0f';
+    ctx.fillRect(x+10, y+28 + (legL > 0 ? 1 : 0), 6, 3);
+    ctx.fillRect(x+17, y+28 + (legR > 0 ? 1 : 0), 6, 3);
+    // body (dark tunic)
+    ctx.fillStyle = '#1a1a1a'; ctx.fillRect(x+9, y+12, 14, 10);
+    ctx.fillStyle = '#2e2e2e'; ctx.fillRect(x+11, y+14, 10, 6);
+    ctx.fillStyle = '#111';    ctx.fillRect(x+9, y+20, 14, 1); // belt
+    // arms
+    ctx.fillStyle = '#1a1a1a';
+    ctx.fillRect(x+5,  y+12, 4, 8 + (Math.abs(legL) > 1 ? 2 : 0));
+    ctx.fillRect(x+23, y+12, 4, 8 + (Math.abs(legR) > 1 ? 2 : 0));
+    // neck
+    ctx.fillStyle = '#c4c4c4'; ctx.fillRect(x+14, y+9, 4, 4);
+    // head
+    ctx.fillStyle = '#e0e0e0'; ctx.fillRect(x+10, y+1, 12, 11);
+    // hair
+    ctx.fillStyle = '#111'; ctx.fillRect(x+10, y+1, 12, 4);
+    ctx.fillRect(x+10, y+1, 2, 9); ctx.fillRect(x+20, y+1, 2, 9);
+    // eyes
+    ctx.fillStyle = '#0e0e0e';
+    ctx.fillRect(x+13, y+6, 2, 3);
+    ctx.fillRect(x+17, y+6, 2, 3);
+    ctx.fillRect(x+14, y+10, 4, 1);
   };
   for (let row = 0; row < 4; row += 1) {
     drawFrame(0, row, 0, 0);
-    drawFrame(1, row, 3, -1);
-    drawFrame(2, row, -1, 3);
+    drawFrame(1, row, 3, -2);
+    drawFrame(2, row, -2, 3);
   }
   return cv;
 }
@@ -847,15 +926,28 @@ function buildNpcCanvas() {
   const ctx = cv.getContext('2d');
   for (let i = 0; i < 3; i += 1) {
     const x = i * 32; const bob = i === 1 ? -1 : 0;
-    ctx.fillStyle = '#1e2a22'; ctx.fillRect(x + 8, 13 + bob, 16, 14);
-    ctx.fillStyle = '#3a5040'; ctx.fillRect(x + 9, 14 + bob, 14, 12);
-    ctx.fillStyle = '#1e2420'; ctx.fillRect(x + 10, 3 + bob, 12, 11);
-    ctx.fillStyle = '#c8b8a0'; ctx.fillRect(x + 11, 4 + bob, 10,  9);
-    ctx.fillStyle = '#201c18';
-    ctx.fillRect(x + 13, 6 + bob, 2, 2);
-    ctx.fillRect(x + 17, 6 + bob, 2, 2);
-    ctx.fillStyle = '#2a3828'; ctx.fillRect(x + 10, 3 + bob, 12, 3);
-    ctx.fillStyle = '#8a6840'; ctx.fillRect(x + 22, 8 + bob,  2, 18);
+    // shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.15)'; ctx.fillRect(x+8, 30, 16, 2);
+    // robe (wide — distinct from player silhouette)
+    ctx.fillStyle = '#181818'; ctx.fillRect(x+7, 13+bob, 18, 15);
+    ctx.fillStyle = '#252525'; ctx.fillRect(x+9, 15+bob, 14, 11);
+    ctx.fillStyle = '#101010'; ctx.fillRect(x+15, 13+bob, 2, 15);
+    // staff
+    ctx.fillStyle = '#b0b0b0'; ctx.fillRect(x+24, 3+bob, 2, 25);
+    ctx.fillStyle = '#e8e8e8'; ctx.fillRect(x+23, 2+bob, 4, 3);
+    // arms
+    ctx.fillStyle = '#181818'; ctx.fillRect(x+4, 13+bob, 4, 10);
+    ctx.fillRect(x+24, 13+bob, 4, 9);
+    // neck
+    ctx.fillStyle = '#d0d0d0'; ctx.fillRect(x+14, 9+bob, 4, 5);
+    // head (rounded, partially hooded)
+    ctx.fillStyle = '#e4e4e4'; ctx.fillRect(x+10, 1+bob, 12, 10);
+    ctx.fillStyle = '#111';    ctx.fillRect(x+10, 1+bob, 12, 4);
+    ctx.fillRect(x+10, 1+bob, 2, 10); ctx.fillRect(x+20, 1+bob, 2, 10);
+    // eyes
+    ctx.fillStyle = '#0a0a0a';
+    ctx.fillRect(x+13, 5+bob, 2, 2);
+    ctx.fillRect(x+17, 5+bob, 2, 2);
   }
   return cv;
 }
@@ -866,20 +958,27 @@ function buildEnemyCanvas() {
   const ctx = cv.getContext('2d');
   for (let i = 0; i < 3; i += 1) {
     const x = i * 32; const p = i === 1 ? -1 : (i === 2 ? 1 : 0);
-    ctx.fillStyle = '#1e0e18';
-    ctx.fillRect(x + 4,  14 + p, 4, 10);
-    ctx.fillRect(x + 24, 14 + p, 4, 10);
-    ctx.fillStyle = '#120a10'; ctx.fillRect(x + 6,  8 + p, 20, 18);
-    ctx.fillStyle = '#2a1828'; ctx.fillRect(x + 7,  9 + p, 18, 16);
-    ctx.fillStyle = '#3c2438'; ctx.fillRect(x + 9,  10 + p, 6,  8);
-    ctx.fillStyle = '#1a0e18'; ctx.fillRect(x + 9,  3 + p, 14, 10);
-    ctx.fillStyle = '#301828'; ctx.fillRect(x + 10, 4 + p, 12,  8);
-    ctx.fillStyle = '#f0f8ff';
-    ctx.fillRect(x + 11, 6 + p, 4, 3);
-    ctx.fillRect(x + 17, 6 + p, 4, 3);
-    ctx.fillStyle = '#60b8ff';
-    ctx.fillRect(x + 12, 7 + p, 2, 1);
-    ctx.fillRect(x + 18, 7 + p, 2, 1);
+    // wings / appendages
+    ctx.fillStyle = '#111';
+    ctx.fillRect(x+2,  12+p, 5, 14);
+    ctx.fillRect(x+25, 12+p, 5, 14);
+    // body
+    ctx.fillStyle = '#0e0e0e'; ctx.fillRect(x+6,  7+p, 20, 19);
+    ctx.fillStyle = '#1c1c1c'; ctx.fillRect(x+8,  9+p, 16, 15);
+    // glowing white eyes (maximum contrast vs dark body)
+    ctx.fillStyle = '#f0f0f0';
+    ctx.fillRect(x+9,  10+p, 6, 5);
+    ctx.fillRect(x+17, 10+p, 6, 5);
+    ctx.fillStyle = '#c0c0c0';
+    ctx.fillRect(x+10, 11+p, 4, 3);
+    ctx.fillRect(x+18, 11+p, 4, 3);
+    // head
+    ctx.fillStyle = '#0e0e0e'; ctx.fillRect(x+8, 1+p, 16, 9);
+    ctx.fillStyle = '#1c1c1c'; ctx.fillRect(x+10, 2+p, 12, 7);
+    // horns
+    ctx.fillStyle = '#080808';
+    ctx.fillRect(x+9,  p, 3, 4);
+    ctx.fillRect(x+20, p, 3, 4);
   }
   return cv;
 }
@@ -889,9 +988,8 @@ class BootScene extends Phaser.Scene {
   constructor() { super('BootScene'); }
 
   preload() {
-    // Maps are defined inline in MAP_DEFS — no JSON files to load.
-    // Import keeps Vite's asset pipeline happy so the PNG is copied to dist.
-    this.load.image(ART_KEYS.tiles, kenneyTilesUrl);
+    // Tileset built procedurally — crisp monochrome 16×16 pixel tiles, no external file.
+    this.load.image(ART_KEYS.tiles, buildRpgTileset().toDataURL());
     this.load.spritesheet(ART_KEYS.player, buildPlayerCanvas().toDataURL(), { frameWidth: 32, frameHeight: 32 });
     this.load.spritesheet(ART_KEYS.npc,    buildNpcCanvas().toDataURL(),    { frameWidth: 32, frameHeight: 32 });
     this.load.spritesheet(ART_KEYS.enemy,  buildEnemyCanvas().toDataURL(),  { frameWidth: 32, frameHeight: 32 });
@@ -952,15 +1050,37 @@ class OverworldScene extends Phaser.Scene {
     this.physics.world.setFPS(60);
     this.keys = this.input.keyboard.addKeys('W,A,S,D,UP,DOWN,LEFT,RIGHT,SHIFT,E,I');
 
-    this.player = this.physics.add.sprite(0, 0, leadAvatarKey(), 0).setScale(1.65).setDepth(10);
+    this.player = this.physics.add.sprite(0, 0, leadAvatarKey(), 0).setScale(1.5).setDepth(10);
     this.player.body.setSize(16, 12).setOffset(8, 18);
     this.player.setTint(tintFromLead());
 
     this.loadMap(STATE.world.mapId, STATE.world.spawnName);
 
-    this.cameras.main.startFollow(this.player, true, 0.12, 0.12);
-    this.cameras.main.setZoom(1.02);
+    this.cameras.main.startFollow(this.player, true, 0.09, 0.09);
+    this.cameras.main.setZoom(window.innerWidth < 768 ? 1.5 : 2.5);
     this.cameras.main.roundPixels = true;
+
+    // Touch / pointer controls — left-half drag = move direction vector
+    this.touchMove = { x: 0, y: 0 };
+    this._touchActive = false;
+    this._touchOrig = { x: 0, y: 0 };
+    this.input.on('pointerdown', (p) => {
+      if (p.x < this.scale.width * 0.65) {
+        this._touchActive = true;
+        this._touchOrig = { x: p.x, y: p.y };
+      }
+    });
+    this.input.on('pointermove', (p) => {
+      if (!this._touchActive) return;
+      const dx = p.x - this._touchOrig.x, dy = p.y - this._touchOrig.y;
+      const len = Math.sqrt(dx * dx + dy * dy);
+      this.touchMove.x = len > 10 ? dx / Math.min(len, 65) : 0;
+      this.touchMove.y = len > 10 ? dy / Math.min(len, 65) : 0;
+    });
+    this.input.on('pointerup', () => {
+      this._touchActive = false;
+      this.touchMove = { x: 0, y: 0 };
+    });
 
     bus.on('state-reloaded', () => {
       this.refreshLeadAvatar();
@@ -986,13 +1106,13 @@ class OverworldScene extends Phaser.Scene {
     const key = leadAvatarKey();
     this.player.setTexture(key, 0);
     if (key === LEAD_NORMIE_TEXTURE_KEY) {
-      // Normie canvas is 80×80 — display at 0.9 scale = 72px on screen (~2.25 world tiles)
-      this.player.setScale(0.9);
+      // Normie canvas is 80×80 — scale 0.45 = 36px world ≈ 90px on screen at zoom 2.5
+      this.player.setScale(0.45);
       this.player.body.setSize(44, 50).setOffset(18, 22);
       this.player.clearTint();
       this.player.rotation = 0;
     } else {
-      this.player.setScale(2);
+      this.player.setScale(1.5);
       this.player.body.setSize(16, 12).setOffset(8, 18);
       this.player.setTint(tintFromLead());
     }
@@ -1046,7 +1166,7 @@ class OverworldScene extends Phaser.Scene {
 
     mdef.npcs.forEach(({ id, col, row }) => {
       const npcData = NPCS[id] || NPCS.elder;
-      const spr = this.add.sprite(col * 32 + 16, row * 32 + 16, ART_KEYS.npc, 0).setScale(2).setDepth(9);
+      const spr = this.add.sprite(col * 32 + 16, row * 32 + 16, ART_KEYS.npc, 0).setScale(1.5).setDepth(9);
       spr.anims.play('npc-idle', true);
       this.npcs.push({ id, data: npcData, sprite: spr });
     });
@@ -1069,10 +1189,11 @@ class OverworldScene extends Phaser.Scene {
   }
 
   movePlayer(delta) {
-    const left = this.keys.LEFT.isDown || this.keys.A.isDown;
-    const right = this.keys.RIGHT.isDown || this.keys.D.isDown;
-    const up = this.keys.UP.isDown || this.keys.W.isDown;
-    const down = this.keys.DOWN.isDown || this.keys.S.isDown;
+    const tm = this.touchMove;
+    const left  = this.keys.LEFT.isDown  || this.keys.A.isDown || tm.x < -0.25;
+    const right = this.keys.RIGHT.isDown || this.keys.D.isDown || tm.x >  0.25;
+    const up    = this.keys.UP.isDown    || this.keys.W.isDown || tm.y < -0.25;
+    const down  = this.keys.DOWN.isDown  || this.keys.S.isDown || tm.y >  0.25;
 
     const sprint = this.keys.SHIFT.isDown ? 1.7 : 1;
     const speed = 172 * sprint;
@@ -1507,9 +1628,20 @@ gameRef = new Phaser.Game({
 });
 
 window.addEventListener('resize', () => {
-  if (gameRef) gameRef.scale.resize(window.innerWidth, window.innerHeight);
+  if (gameRef) {
+    gameRef.scale.resize(window.innerWidth, window.innerHeight);
+    if (overworldRef) overworldRef.cameras.main.setZoom(window.innerWidth < 768 ? 1.5 : 2.5);
+  }
 });
 
 initUiTheme();
 renderWalletChoices();
 updateHud('Verdant Town');
+
+// Mobile action buttons (visible on touch devices via CSS media query)
+document.getElementById('btn-m-interact')?.addEventListener('click', () => {
+  if (overworldRef && !overworldRef.overlayLocked) overworldRef.handleInteract();
+});
+document.getElementById('btn-m-menu')?.addEventListener('click', () => {
+  if (overworldRef && !overworldRef.overlayLocked && !shopOpen) openMenu();
+});

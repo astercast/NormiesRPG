@@ -13,18 +13,19 @@
 <body class="prelaunch">
   <div id="launch-overlay" class="launch-overlay">
     <div class="launch-center">
-      <p class="launch-kicker">YOUR NORMIES. THEIR ADVENTURE.</p>
-      <h1 class="launch-title">NORMIES RPG</h1>
+      <p class="launch-kicker">—&nbsp;NORMIES RPG&nbsp;—</p>
+      <h1 class="launch-title">YOUR NORMIES.<br>THEIR WORLD.</h1>
 
       <!-- Wallet provider list, populated by JS -->
       <div id="wallet-picker" class="wallet-picker"></div>
 
-      <div class="launch-actions">
-        <button id="btn-launch-wallet" class="btn-pw btn-pw-primary" disabled>Connect Wallet</button>
-        <button id="btn-launch-demo" class="btn-pw btn-pw-secondary">Play Demo</button>
-      </div>
+      <button id="btn-launch-wallet" class="btn-pw btn-pw-primary" disabled>Connect Wallet</button>
 
-      <p id="launch-status" class="launch-disclaimer">Read-only &middot; no signing required &middot; demo uses real Normies from the collection</p>
+      <div class="launch-divider"><span>or</span></div>
+
+      <button id="btn-launch-demo" class="btn-pw btn-pw-ghost">Play Demo — No Wallet Required</button>
+
+      <p id="launch-status" class="launch-disclaimer">Read-only &middot; no signing required &middot; demo uses real Normies</p>
 
       <!-- Normie picker — shown after wallet connects -->
       <div id="normie-select-screen" class="hidden">
@@ -128,6 +129,12 @@
 
   <div class="help">
     <strong>Controls:</strong> WASD or arrows move, Shift sprint, E interact, I inventory.
+  </div>
+
+  <!-- Mobile action buttons (shown on touch devices via CSS) -->
+  <div id="mobile-btns" class="mobile-btns">
+    <button id="btn-m-interact" class="m-btn">TALK</button>
+    <button id="btn-m-menu" class="m-btn">MENU</button>
   </div>
 
   <script type="module" src="./phaser-main.js"></script>
