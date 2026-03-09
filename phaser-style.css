@@ -158,6 +158,36 @@ body.prelaunch .mobile-btns {
   margin-bottom: 16px;
 }
 
+.launch-input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.launch-input-label {
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  text-align: left;
+}
+
+.launch-input {
+  width: 100%;
+  padding: 11px 14px;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
+  outline: none;
+  transition: border-color 120ms;
+  box-sizing: border-box;
+}
+.launch-input::placeholder { color: var(--muted); opacity: 0.6; }
+.launch-input:focus { border-color: var(--text); }
+
 /* wallet choices */
 .wallet-picker {
   display: flex;

@@ -748,7 +748,7 @@ export const COMPANIONS = {
     id: 'grom', name: 'Grom', role: 'Tank',
     hpBonus: 42, atkBonus: 6, skillBonus: 0,
     recruitChapter: 1, awakeningThreshold: 60,
-    npcMapId: 'overworld',
+    npcMapId: 'fields',
     color: 0x8888ff,
     arc: [
       'Grom\'s laugh was the loudest sound in the Render Fields before NULLBYTE silenced it.',
@@ -765,7 +765,7 @@ export const COMPANIONS = {
     id: 'slyx', name: 'Slyx', role: 'Rogue',
     hpBonus: 0, atkBonus: 14, skillBonus: 8,
     recruitChapter: 2, awakeningThreshold: 55,
-    npcMapId: 'overworld',
+    npcMapId: 'forest',
     color: 0xbbbbbb,
     arc: [
       'Slyx flattened their own pixel-traits during the VOID sweep \u2014 grayed out, blending with corrupted tiles, invisible to NULLBYTE\'s scanners.',
@@ -799,7 +799,7 @@ export const COMPANIONS = {
     id: 'elara', name: 'Elara', role: 'Healer',
     hpBonus: 20, atkBonus: 0, skillBonus: 10,
     recruitChapter: 4, awakeningThreshold: 70,
-    npcMapId: 'void_lands',
+    npcMapId: 'ruins',
     color: 0xaaffaa,
     arc: [
       'Elara\'s soulmate Maren was consumed walking home through a void-tide that came without warning.',

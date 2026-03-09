@@ -1,5 +1,4 @@
-﻿import Phaser from 'phaser';
-import { connectWallet, loadWalletNormies, loadDemoNormies, detectWallets } from './wallet.js';
+import Phaser from 'phaser';
 import { makeDemoNormie, fetchNormieFull } from './normie-api.js';
 import {
   CHAPTERS, COMPANIONS, DIALOGUES,
@@ -101,7 +100,7 @@ const STATE = {
     leadId: null,
   },
   world: {
-    mapId: 'home',
+    mapId: 'bedroom',
     spawnName: 'spawn',
   },
   quest: {
@@ -129,19 +128,12 @@ const STATE = {
 };
 
 const ui = {
-  normieSelectScreen: document.getElementById('normie-select-screen'),
-  normieSelectGrid: document.getElementById('normie-select-grid'),
-  normieSelectStatus: document.getElementById('normie-select-status'),
   launchOverlay: document.getElementById('launch-overlay'),
   launchStatus: document.getElementById('launch-status'),
-  walletPicker: document.getElementById('wallet-picker'),
-  walletRefresh: document.getElementById('btn-wallet-refresh'),
-  launchWallet: document.getElementById('btn-launch-wallet'),
   launchDemo: document.getElementById('btn-launch-demo'),
+  launchPlay: document.getElementById('btn-launch-play'),
+  normieIdInput: document.getElementById('normie-id-input'),
   themeToggle: document.getElementById('btn-theme-toggle'),
-  launchThemeToggle: document.getElementById('btn-theme-toggle-launch'),
-  walletConnect: document.getElementById('btn-wallet-connect'),
-  walletDemo: document.getElementById('btn-wallet-demo'),
   walletStatus: document.getElementById('wallet-status'),
   leadLabel: document.getElementById('lead-label'),
   zoneLabel: document.getElementById('zone-label'),
@@ -202,8 +194,6 @@ let gameRef = null;
 let overworldRef = null;
 let menuOpen = false;
 let shopOpen = false;
-let detectedWallets = [];
-let selectedWalletId = null;
 let uiTheme = 'dark';
 const LEAD_NORMIE_TEXTURE_KEY = 'leadNormieAvatar';
 
@@ -221,7 +211,7 @@ function shortAddr(addr) {
 }
 
 function slotKey() {
-  return STATE.identity.walletAddress ? `wallet_${STATE.identity.walletAddress.toLowerCase()}` : 'demo_guest';
+  return STATE.identity.walletAddress ? `addr_${STATE.identity.walletAddress.toLowerCase()}` : 'demo_guest';
 }
 
 function itemById(id) {
@@ -412,64 +402,6 @@ function toggleUiTheme() {
 function initUiTheme() {
   const saved = localStorage.getItem('normies-ui-theme');
   applyUiTheme(saved || 'light');
-}
-
-function walletErrorMessage(err) {
-  const code = err?.message || 'UNKNOWN_ERROR';
-  if (code === 'NO_WALLET') return 'No browser wallet detected. Install MetaMask/Coinbase/Rabby or use Demo Mode.';
-  if (code === 'USER_REJECTED') return 'Wallet request was rejected. Approve the connection prompt to continue.';
-  if (code === 'WALLET_PROVIDER_UNAVAILABLE') return 'Selected wallet provider is unavailable. Refresh wallet list and try again.';
-  return `Wallet connect failed: ${code}`;
-}
-
-// â”€â”€ Wallet modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-function openWalletModal() {
-  detectedWallets = detectWallets();
-  const modal = document.getElementById('wallet-modal');
-  const grid  = document.getElementById('wallet-modal-grid');
-  const err   = document.getElementById('wallet-modal-error');
-  if (!modal || !grid) return;
-  err.textContent = '';
-
-  const ALL_WALLETS = [
-    { id: 'metamask',  name: 'MetaMask',        icon: 'ðŸ¦Š', detect: () => !!window.ethereum?.isMetaMask },
-    { id: 'coinbase',  name: 'Coinbase Wallet',  icon: 'ðŸ”µ', detect: () => !!window.ethereum?.isCoinbaseWallet },
-    { id: 'rabby',     name: 'Rabby',            icon: 'ðŸ°', detect: () => !!window.ethereum?.isRabby },
-    { id: 'brave',     name: 'Brave Wallet',     icon: 'ðŸ¦', detect: () => !!window.ethereum?.isBraveWallet },
-    { id: 'injected',  name: 'Browser Wallet',   icon: 'ðŸŒ', detect: () => !!window.ethereum },
-    { id: 'walletconnect', name: 'WalletConnect', icon: 'ðŸ”—', detect: () => false },
-  ];
-
-  grid.innerHTML = '';
-  ALL_WALLETS.forEach((w) => {
-    const available = detectedWallets.some((d) => d.id === w.id) || w.detect();
-    const btn = document.createElement('button');
-    btn.className = 'wm-option' + (available ? '' : ' wm-unavailable');
-    btn.type = 'button';
-    btn.innerHTML = `<span class="wm-icon">${w.icon}</span><span class="wm-name">${w.name}</span>${available ? '' : '<span class="wm-tag">Not installed</span>'}`;
-    btn.addEventListener('click', async () => {
-      if (!available) {
-        err.textContent = `${w.name} is not installed in this browser.`;
-        return;
-      }
-      err.textContent = 'Connecting...';
-      closeWalletModal();
-      await hydrateWalletParty(w.id);
-    });
-    grid.appendChild(btn);
-  });
-
-  modal.classList.remove('hidden');
-}
-
-function closeWalletModal() {
-  document.getElementById('wallet-modal')?.classList.add('hidden');
-}
-
-function renderWalletChoices() {
-  // Legacy â€” kept for compatibility but wallet flow now uses openWalletModal()
-  detectedWallets = detectWallets();
-  if (ui.launchWallet) ui.launchWallet.disabled = false;
 }
 
 function exitLaunchOverlay() {
@@ -685,37 +617,24 @@ function applyCloudPayload(data) {
 }
 
 async function saveCloud() {
-  ui.saveStatus.textContent = `Cloud save (${slotKey()}): syncing...`;
+  ui.saveStatus.textContent = `Saving (${slotKey()})...`;
   try {
-    const resp = await fetch('/api/save', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ slot: slotKey(), data: cloudPayload() }),
-    });
-    const json = await resp.json();
-    if (!resp.ok || !json.ok) throw new Error(json.error || 'Save failed');
-    ui.saveStatus.textContent = `Cloud save (${slotKey()}): success`;
+    localStorage.setItem(`normies-rpg:${slotKey()}`, JSON.stringify(cloudPayload()));
+    ui.saveStatus.textContent = `Saved (${slotKey()})`;
   } catch (err) {
-    localStorage.setItem(`normies-rpg-backup:${slotKey()}`, JSON.stringify(cloudPayload()));
-    ui.saveStatus.textContent = `Cloud save failed (${err.message}). Local backup written.`;
+    ui.saveStatus.textContent = `Save failed: ${err.message}`;
   }
 }
 
 async function loadCloud() {
-  ui.saveStatus.textContent = `Cloud load (${slotKey()}): syncing...`;
+  ui.saveStatus.textContent = `Loading (${slotKey()})...`;
   try {
-    const resp = await fetch(`/api/load?slot=${encodeURIComponent(slotKey())}`);
-    const json = await resp.json();
-    if (!resp.ok || !json.ok) throw new Error(json.error || 'Load failed');
-    if (!applyCloudPayload(json.data)) throw new Error('Corrupt payload');
-    ui.saveStatus.textContent = `Cloud load (${slotKey()}): success`;
+    const raw = localStorage.getItem(`normies-rpg:${slotKey()}`);
+    if (!raw) throw new Error('No save found');
+    if (!applyCloudPayload(JSON.parse(raw))) throw new Error('Corrupt save');
+    ui.saveStatus.textContent = `Loaded (${slotKey()})`;
   } catch (err) {
-    const backup = localStorage.getItem(`normies-rpg-backup:${slotKey()}`);
-    if (backup && applyCloudPayload(JSON.parse(backup))) {
-      ui.saveStatus.textContent = `Cloud load failed (${err.message}). Local backup restored.`;
-    } else {
-      ui.saveStatus.textContent = `Cloud load failed: ${err.message}`;
-    }
+    ui.saveStatus.textContent = `Load failed: ${err.message}`;
   }
 }
 
@@ -1105,6 +1024,7 @@ function grantVictory(data) {
   }
 
   updateHud();
+  autoSave();
 }
 
 function tintFromLead() {
@@ -1124,97 +1044,315 @@ function fillBlock(map, x1, y1, x2, y2, wallId, inId) {
       map[y][x] = (y === y1 || y === y2 || x === x1 || x === x2) ? wallId : inId;
 }
 
-function buildTownMap() {
-  const W = 36, H = 30;
+function fillRect(map, x1, y1, x2, y2, tid) {
+  for (let y = y1; y <= y2; y++)
+    for (let x = x1; x <= x2; x++) map[y][x] = tid;
+}
+
+// â”€â”€ Bedroom (cozy upstairs room â€“ bed, bookshelf, rug, window, desk) â”€â”€
+function buildBedroomMap() {
+  const W = 16, H = 12;
   const map = Array.from({ length: H }, () => Array(W).fill(TID.FLOOR));
   for (let x = 0; x < W; x++) { map[0][x] = TID.WALL; map[H-1][x] = TID.WALL; }
   for (let y = 0; y < H; y++) { map[y][0] = TID.WALL; map[y][W-1] = TID.WALL; }
-  for (let x = 15; x <= 20; x++) map[H-1][x] = TID.PATH; // south exit gap
-  for (let x = 1; x < W-1; x++) { map[14][x] = TID.PATH; map[15][x] = TID.PATH; } // E-W road
-  for (let y = 1; y < H-1; y++) { map[y][17] = TID.PATH; map[y][18] = TID.PATH; } // N-S road
-  fillBlock(map,  2,  2, 14, 11, TID.WALL, TID.DARK); // NW building
-  fillBlock(map, 21,  2, 33, 11, TID.WALL, TID.DARK); // NE building
-  fillBlock(map,  2, 18, 14, 27, TID.WALL, TID.DARK); // SW building
-  fillBlock(map, 21, 18, 33, 27, TID.WALL, TID.DARK); // SE building
+  // Bed (top-left, 3x2)
+  fillRect(map, 2, 1, 4, 3, TID.DARK);
+  // Bookshelf along top wall
+  fillRect(map, 7, 1, 9, 1, TID.DARK);
+  // Desk + chair (top-right)
+  fillRect(map, 12, 1, 13, 2, TID.DARK);
+  // Window markers (decorative)
+  map[0][6] = TID.DARK; map[0][10] = TID.DARK;
+  // Cozy rug (center â€“ RUINS tile for warm texture)
+  fillRect(map, 5, 5, 10, 8, TID.RUINS);
+  // Small cabinet by door
+  map[9][13] = TID.DARK;
+  // Door south â†’ stairs to downstairs (3 tiles wide)
+  for (let x = 7; x <= 9; x++) map[H-1][x] = TID.PATH;
   return map;
 }
 
-function buildOverworldMap() {
-  const W = 72, H = 72;
+// â”€â”€ Downstairs (kitchen + living room â€“ Mom NPC here) â”€â”€
+function buildDownstairsMap() {
+  const W = 20, H = 16;
+  const map = Array.from({ length: H }, () => Array(W).fill(TID.FLOOR));
+  for (let x = 0; x < W; x++) { map[0][x] = TID.WALL; map[H-1][x] = TID.WALL; }
+  for (let y = 0; y < H; y++) { map[y][0] = TID.WALL; map[y][W-1] = TID.WALL; }
+  // Stairs from bedroom (north entrance)
+  for (let x = 9; x <= 11; x++) map[0][x] = TID.PATH;
+  // Kitchen counter (left wall area)
+  fillRect(map, 1, 1, 3, 1, TID.DARK);
+  fillRect(map, 1, 1, 1, 5, TID.DARK);
+  // Stove
+  map[3][2] = TID.DARK; map[3][3] = TID.DARK;
+  // Dining table (center-left)
+  fillRect(map, 5, 4, 8, 6, TID.DARK);
+  // Living room couch (right side)
+  fillRect(map, 13, 2, 17, 3, TID.DARK);
+  // Coffee table
+  fillRect(map, 14, 5, 16, 5, TID.DARK);
+  // Bookshelf (right wall)
+  fillRect(map, 18, 1, 18, 4, TID.DARK);
+  // Rug in living room
+  fillRect(map, 13, 6, 17, 9, TID.RUINS);
+  // Front door (south exit â†’ town)
+  for (let x = 9; x <= 11; x++) map[H-1][x] = TID.PATH;
+  // Fireplace (bottom-right corner)
+  fillRect(map, 16, 13, 18, 14, TID.DARK);
+  return map;
+}
+
+// â”€â”€ Town (proper RPG town â€“ buildings, fountain, shops) â”€â”€
+function buildTownMap() {
+  const W = 40, H = 32;
+  const map = Array.from({ length: H }, () => Array(W).fill(TID.FLOOR));
+  for (let x = 0; x < W; x++) { map[0][x] = TID.WALL; map[H-1][x] = TID.WALL; }
+  for (let y = 0; y < H; y++) { map[y][0] = TID.WALL; map[y][W-1] = TID.WALL; }
+  // Main road (horizontal)
+  for (let x = 1; x < W-1; x++) { map[15][x] = TID.PATH; map[16][x] = TID.PATH; }
+  // Cross road (vertical)
+  for (let y = 1; y < H-1; y++) { map[y][20] = TID.PATH; map[y][21] = TID.PATH; }
+  // Fountain/plaza center
+  fillBlock(map, 18, 13, 23, 18, TID.WATER, TID.WATER);
+  fillRect(map, 19, 14, 22, 17, TID.PATH);
+  map[15][20] = TID.WATER; map[15][21] = TID.WATER;
+  map[16][20] = TID.WATER; map[16][21] = TID.WATER;
+  // Elder's Hall (NW)
+  fillBlock(map, 2, 2, 16, 10, TID.WALL, TID.DARK);
+  // Smithy (NE)
+  fillBlock(map, 25, 2, 37, 10, TID.WALL, TID.DARK);
+  // Merchant shop (SW)
+  fillBlock(map, 2, 20, 16, 28, TID.WALL, TID.DARK);
+  // Scout's post (SE)
+  fillBlock(map, 25, 20, 37, 28, TID.WALL, TID.DARK);
+  // Tree decorations
+  for (let x = 3; x < W-3; x += 7) { map[12][x] = TID.WALL; map[19][x] = TID.WALL; }
+  // North entry (from home)
+  for (let x = 19; x <= 22; x++) map[0][x] = TID.PATH;
+  // South exit (to fields)
+  for (let x = 19; x <= 22; x++) map[H-1][x] = TID.PATH;
+  return map;
+}
+
+// â”€â”€ Fields (open grassland, tier 1 encounters) â”€â”€
+function buildFieldsMap() {
+  const W = 48, H = 48;
   const map = Array.from({ length: H }, () => Array(W).fill(TID.GRASS));
   for (let x = 0; x < W; x++) { map[0][x] = TID.WALL; map[H-1][x] = TID.WALL; }
   for (let y = 0; y < H; y++) { map[y][0] = TID.WALL; map[y][W-1] = TID.WALL; }
-  for (let x = 1; x < W-1; x++) { map[36][x] = TID.PATH; map[37][x] = TID.PATH; } // E-W road
-  for (let y = 1; y < H-1; y++) { map[y][30] = TID.PATH; map[y][31] = TID.PATH; } // N-S road
-  for (let x = 30; x <= 57; x++) { map[26][x] = TID.PATH; map[27][x] = TID.PATH; } // branch to ruins
+  // Main path N-S
+  for (let y = 1; y < H-1; y++) { map[y][24] = TID.PATH; map[y][25] = TID.PATH; }
+  // Branch path E (to forest)
+  for (let x = 25; x < W-1; x++) { map[24][x] = TID.PATH; map[25][x] = TID.PATH; }
+  // Scattered rocks/trees
+  const obstacles = [[5,8],[12,5],[8,15],[35,10],[40,20],[10,30],[30,35],[15,40],[38,42],[6,38]];
+  obstacles.forEach(([x,y]) => { if (x < W-1 && y < H-1) map[y][x] = TID.WALL; });
+  // Small pond
+  fillRect(map, 8, 20, 12, 23, TID.WATER);
+  // Farm rows (top-left)
+  fillRect(map, 3, 3, 15, 3, TID.PATH);
+  fillRect(map, 3, 6, 15, 6, TID.PATH);
+  fillRect(map, 3, 9, 15, 9, TID.PATH);
+  // North entry (from town)
+  for (let x = 23; x <= 26; x++) map[0][x] = TID.PATH;
+  // East exit (to forest)
+  for (let y = 23; y <= 26; y++) map[y][W-1] = TID.PATH;
+  // South exit (to cave)
+  for (let x = 23; x <= 26; x++) map[H-1][x] = TID.PATH;
   return map;
 }
 
+// â”€â”€ Forest (dark woods, tier 2 encounters) â”€â”€
+function buildForestMap() {
+  const W = 40, H = 40;
+  const map = Array.from({ length: H }, () => Array(W).fill(TID.GRASS));
+  for (let x = 0; x < W; x++) { map[0][x] = TID.WALL; map[H-1][x] = TID.WALL; }
+  for (let y = 0; y < H; y++) { map[y][0] = TID.WALL; map[y][W-1] = TID.WALL; }
+  // Dense tree coverage
+  for (let y = 2; y < H-2; y += 3)
+    for (let x = 2; x < W-2; x += 4)
+      if (Math.abs(x - 20) > 3 || Math.abs(y - 20) > 3)
+        map[y][x] = TID.WALL;
+  // Winding path westâ†’centerâ†’east
+  for (let x = 1; x < W-1; x++) map[20][x] = TID.PATH;
+  for (let y = 1; y < 21; y++) map[y][20] = TID.PATH;
+  // Center clearing / campfire
+  fillRect(map, 17, 17, 23, 23, TID.GRASS);
+  fillRect(map, 18, 18, 22, 22, TID.PATH);
+  // Stream N-S east side
+  for (let y = 3; y < H-3; y++) map[y][32] = TID.WATER;
+  // West entry (from fields)
+  for (let y = 19; y <= 22; y++) map[y][0] = TID.PATH;
+  return map;
+}
+
+// â”€â”€ Cave (dark dungeon, tier 2-3, mid-boss) â”€â”€
+function buildCaveMap() {
+  const W = 32, H = 32;
+  const map = Array.from({ length: H }, () => Array(W).fill(TID.WALL));
+  // Carve out chambers
+  // Entry chamber (north)
+  fillRect(map, 12, 2, 20, 8, TID.DARK);
+  // Corridor south
+  fillRect(map, 15, 8, 17, 14, TID.DARK);
+  // Main chamber
+  fillRect(map, 8, 14, 24, 22, TID.DARK);
+  // Side alcove left
+  fillRect(map, 3, 16, 8, 20, TID.DARK);
+  // Side alcove right
+  fillRect(map, 24, 16, 28, 20, TID.DARK);
+  // Corridor to boss chamber
+  fillRect(map, 15, 22, 17, 26, TID.DARK);
+  // Boss chamber
+  fillRect(map, 10, 26, 22, 30, TID.DARK);
+  // Stalactite pillars
+  map[16][10] = TID.WALL; map[16][22] = TID.WALL;
+  map[20][11] = TID.WALL; map[20][21] = TID.WALL;
+  // Lava pool in boss room
+  fillRect(map, 14, 28, 18, 29, TID.WATER);
+  // Border walls
+  for (let x = 0; x < W; x++) { map[0][x] = TID.WALL; map[H-1][x] = TID.WALL; }
+  for (let y = 0; y < H; y++) { map[y][0] = TID.WALL; map[y][W-1] = TID.WALL; }
+  // North entry
+  for (let x = 14; x <= 18; x++) map[0][x] = TID.PATH;
+  // South exit (to ruins)
+  for (let x = 14; x <= 18; x++) map[H-1][x] = TID.PATH;
+  return map;
+}
+
+// â”€â”€ Ruins (final area â€“ corrupted, tier 3, final boss) â”€â”€
 function buildRuinsMap() {
   const W = 36, H = 36;
   const map = Array.from({ length: H }, () => Array(W).fill(TID.RUINS));
   for (let x = 0; x < W; x++) { map[0][x] = TID.WALL; map[H-1][x] = TID.WALL; }
   for (let y = 0; y < H; y++) { map[y][0] = TID.WALL; map[y][W-1] = TID.WALL; }
-  for (let py = 4; py < H-4; py += 8)   // pillar columns every 8 tiles
-    for (let px = 4; px < W-4; px += 8)
+  // Crumbling pillar grid
+  for (let py = 5; py < H-5; py += 6)
+    for (let px = 5; px < W-5; px += 6)
       fillBlock(map, px, py, px+1, py+1, TID.WALL, TID.WALL);
-  return map;
-}
-
-// 20Ã—14 bedroom / home interior.  Player wakes here; exit south â†’ town.
-function buildHomeMap() {
-  const W = 32, H = 22;
-  const map = Array.from({ length: H }, () => Array(W).fill(TID.FLOOR));
-  // Outer walls
-  for (let x = 0; x < W; x++) { map[0][x] = TID.WALL; map[H-1][x] = TID.WALL; }
-  for (let y = 0; y < H; y++) { map[y][0] = TID.WALL; map[y][W-1] = TID.WALL; }
-  // South exit gap (4 tiles wide, centred)
-  for (let x = 14; x <= 17; x++) map[H-1][x] = TID.PATH;
-  // Bed (top-left nook)
-  fillBlock(map, 2, 1, 7, 6, TID.DARK, TID.DARK);
-  // Desk (top-right)
-  for (let x = 22; x <= 28; x++) { map[2][x] = TID.DARK; map[3][x] = TID.DARK; }
-  // Kitchen counter (right side wall)
-  for (let y = 8; y <= 14; y++) map[y][W-2] = TID.DARK;
+  // Central arena
+  fillRect(map, 12, 12, 24, 24, TID.DARK);
+  fillBlock(map, 14, 14, 22, 22, TID.WALL, TID.DARK);
+  // Arena entrance gaps
+  fillRect(map, 17, 12, 19, 14, TID.RUINS);
+  fillRect(map, 17, 22, 19, 24, TID.RUINS);
+  // Void pools
+  fillRect(map, 3, 3, 6, 6, TID.WATER);
+  fillRect(map, 29, 29, 32, 32, TID.WATER);
+  // North entry (from cave)
+  for (let x = 16; x <= 20; x++) map[0][x] = TID.PATH;
   return map;
 }
 
 const MAP_DEFS = {
-  home: {
-    w: 32, h: 22,
-    ground: buildHomeMap(),
-    spawn: { spawn: { col: 10, row: 11 } },
-    warps:      [{ col: 14, row: 21, cols: 4, rows: 1, targetMap: 'town', targetSpawn: 'from_overworld' }],
-    npcs:       [{ id: 'mom_up', col: 13, row: 11 }],
+  bedroom: {
+    w: 16, h: 12,
+    ground: buildBedroomMap(),
+    spawn: { spawn: { col: 8, row: 6 } },
+    warps: [{ col: 7, row: 11, cols: 3, rows: 1, targetMap: 'downstairs', targetSpawn: 'from_bedroom' }],
+    npcs: [],
     encounters: [],
-    bosses:     [],
+    bosses: [],
+  },
+  downstairs: {
+    w: 20, h: 16,
+    ground: buildDownstairsMap(),
+    spawn: {
+      from_bedroom: { col: 10, row: 2 },
+      from_town: { col: 10, row: 13 },
+    },
+    warps: [
+      { col: 9, row: 0, cols: 3, rows: 1, targetMap: 'bedroom', targetSpawn: 'spawn' },
+      { col: 9, row: 15, cols: 3, rows: 1, targetMap: 'town', targetSpawn: 'from_home' },
+    ],
+    npcs: [{ id: 'mom_down', col: 7, row: 5 }],
+    encounters: [],
+    bosses: [],
   },
   town: {
-    w: 36, h: 30,
+    w: 40, h: 32,
     ground: buildTownMap(),
-    spawn: { from_overworld: { col: 18, row: 16 } },
-    warps:     [{ col: 15, row: 28, cols: 6, rows: 2, targetMap: 'overworld', targetSpawn: 'from_town' }],
-    npcs:      [{ id: 'elder', col: 8, row: 12 }, { id: 'smith', col: 26, row: 12 }, { id: 'merchant', col: 8, row: 17 }, { id: 'scout', col: 26, row: 17 }],
+    spawn: {
+      from_home: { col: 20, row: 2 },
+      from_fields: { col: 20, row: 29 },
+    },
+    warps: [
+      { col: 19, row: 0, cols: 4, rows: 1, targetMap: 'downstairs', targetSpawn: 'from_town' },
+      { col: 19, row: 31, cols: 4, rows: 1, targetMap: 'fields', targetSpawn: 'from_town' },
+    ],
+    npcs: [
+      { id: 'elder', col: 9, row: 12 },
+      { id: 'smith', col: 31, row: 12 },
+      { id: 'merchant', col: 9, row: 22 },
+      { id: 'scout', col: 31, row: 22 },
+    ],
     encounters: [],
-    bosses:    [],
+    bosses: [],
   },
-  overworld: {
-    w: 72, h: 72,
-    ground: buildOverworldMap(),
-    spawn: { spawn_main: { col: 36, row: 36 }, from_town: { col: 30, row: 40 }, from_ruins: { col: 50, row: 28 } },
-    warps:     [{ col: 28, row: 38, cols: 4, rows: 4, targetMap: 'town', targetSpawn: 'from_overworld' }, { col: 55, row: 25, cols: 4, rows: 4, targetMap: 'ruins', targetSpawn: 'from_overworld' }],
-    npcs:      [{ id: 'grom', col: 22, row: 20 }, { id: 'slyx', col: 42, row: 15 }],
-    encounters: [{ col: 10, row: 10, cols: 20, rows: 20, chance: 0.13, tier: 1 }, { col: 42, row: 10, cols: 20, rows: 20, chance: 0.18, tier: 2 }, { col: 10, row: 42, cols: 20, rows: 20, chance: 0.18, tier: 2 }, { col: 42, row: 42, cols: 20, rows: 20, chance: 0.22, tier: 3 }],
-    bosses:    [],
+  fields: {
+    w: 48, h: 48,
+    ground: buildFieldsMap(),
+    spawn: {
+      from_town: { col: 24, row: 3 },
+      from_forest: { col: 44, row: 24 },
+      from_cave: { col: 24, row: 44 },
+    },
+    warps: [
+      { col: 23, row: 0, cols: 4, rows: 1, targetMap: 'town', targetSpawn: 'from_fields' },
+      { col: 47, row: 23, cols: 1, rows: 4, targetMap: 'forest', targetSpawn: 'from_fields' },
+      { col: 23, row: 47, cols: 4, rows: 1, targetMap: 'cave', targetSpawn: 'from_fields' },
+    ],
+    npcs: [{ id: 'grom', col: 20, row: 30 }],
+    encounters: [
+      { col: 2, row: 2, cols: 20, rows: 20, chance: 0.12, tier: 1 },
+      { col: 26, row: 2, cols: 20, rows: 20, chance: 0.12, tier: 1 },
+      { col: 2, row: 26, cols: 20, rows: 20, chance: 0.14, tier: 1 },
+      { col: 26, row: 26, cols: 20, rows: 20, chance: 0.14, tier: 1 },
+    ],
+    bosses: [],
+  },
+  forest: {
+    w: 40, h: 40,
+    ground: buildForestMap(),
+    spawn: { from_fields: { col: 3, row: 20 } },
+    warps: [
+      { col: 0, row: 19, cols: 1, rows: 4, targetMap: 'fields', targetSpawn: 'from_forest' },
+    ],
+    npcs: [{ id: 'slyx', col: 20, row: 20 }],
+    encounters: [
+      { col: 3, row: 3, cols: 34, rows: 34, chance: 0.18, tier: 2 },
+    ],
+    bosses: [],
+  },
+  cave: {
+    w: 32, h: 32,
+    ground: buildCaveMap(),
+    spawn: {
+      from_fields: { col: 16, row: 3 },
+      from_ruins: { col: 16, row: 28 },
+    },
+    warps: [
+      { col: 14, row: 0, cols: 5, rows: 1, targetMap: 'fields', targetSpawn: 'from_cave' },
+      { col: 14, row: 31, cols: 5, rows: 1, targetMap: 'ruins', targetSpawn: 'from_cave' },
+    ],
+    npcs: [{ id: 'lumina', col: 6, row: 18 }],
+    encounters: [
+      { col: 8, row: 14, cols: 16, rows: 8, chance: 0.2, tier: 2 },
+    ],
+    bosses: [{ col: 14, row: 27, cols: 4, rows: 3, bossId: 'abyss_warden' }],
   },
   ruins: {
     w: 36, h: 36,
     ground: buildRuinsMap(),
-    spawn: { from_overworld: { col: 18, row: 18 } },
-    warps:     [{ col: 15, row: 34, cols: 6, rows: 2, targetMap: 'overworld', targetSpawn: 'from_ruins' }],
-    npcs:      [{ id: 'lumina', col: 8, row: 8 }, { id: 'elara', col: 28, row: 28 }],
-    encounters: [{ col: 5, row: 5, cols: 26, rows: 26, chance: 0.22, tier: 3 }],
-    bosses:    [{ col: 16, row: 15, cols: 4, rows: 4, bossId: 'abyss_warden' }],
+    spawn: { from_cave: { col: 18, row: 3 } },
+    warps: [
+      { col: 16, row: 0, cols: 5, rows: 1, targetMap: 'cave', targetSpawn: 'from_ruins' },
+    ],
+    npcs: [{ id: 'elara', col: 18, row: 10 }],
+    encounters: [
+      { col: 3, row: 3, cols: 30, rows: 30, chance: 0.22, tier: 3 },
+    ],
+    bosses: [{ col: 16, row: 17, cols: 4, rows: 4, bossId: 'abyss_warden' }],
   },
 };
 
@@ -1561,10 +1699,16 @@ class OverworldScene extends Phaser.Scene {
   }
 
   zoneFromMap() {
-    if (STATE.world.mapId === 'home')  return 'Your Bedroom';
-    if (STATE.world.mapId === 'town')  return 'Verdant Town';
-    if (STATE.world.mapId === 'ruins') return 'Null Ruins';
-    return 'Neon Plains';
+    const names = {
+      bedroom: 'Your Bedroom',
+      downstairs: 'Downstairs',
+      town: 'Verdant Town',
+      fields: 'Neon Plains',
+      forest: 'Shadow Forest',
+      cave: 'Crystal Cave',
+      ruins: 'Null Ruins',
+    };
+    return names[STATE.world.mapId] || 'Unknown';
   }
 
   clearMapObjects() {
@@ -2002,73 +2146,6 @@ async function hydrateDemoParty() {
   updateHud();
 }
 
-async function hydrateWalletParty(providerId = null) {
-  updateWalletStatus('Connecting wallet...');
-  setLaunchStatus('Connecting wallet...');
-  try {
-    const { provider, address, walletName } = await connectWallet(providerId);
-    setLaunchStatus('Loading your Normies...');
-    const owned = await loadWalletNormies(address, provider);
-
-    if (!owned.length) {
-      showDialogue('Wallet', 'No Normies found in this wallet. Starting demo mode.');
-      await hydrateDemoParty();
-      exitLaunchOverlay();
-      return;
-    }
-
-    // Show normie picker â€” player chooses exactly 1.
-    showNormiePicker(owned, async (chosen) => {
-      STATE.party.roster = [chosen];
-      STATE.party.leadId = chosen.id;
-      STATE.identity.mode = 'wallet';
-      STATE.identity.walletAddress = address;
-      STATE.identity.walletName = walletName;
-      applyLeadNormieStats();
-      if (gameRef) await buildLeadNormieTexture();
-      updateWalletStatus();
-      setLaunchStatus(`Playing as ${chosen.name}.`);
-      updateHud();
-      bus.emit('state-reloaded');
-      exitLaunchOverlay();
-      setOverlayLock(false);
-      loadCloud();
-    });
-  } catch (err) {
-    const message = walletErrorMessage(err);
-    updateWalletStatus(message);
-    setLaunchStatus(message);
-  }
-}
-
-function showNormiePicker(normies, onPick) {
-  if (!ui.normieSelectScreen || !ui.normieSelectGrid) return;
-
-  // Swap launch center content for normie select screen.
-  const center = ui.normieSelectScreen.closest('.launch-center');
-  center?.querySelectorAll('.launch-kicker, .launch-title, .wallet-picker, .launch-actions, .launch-disclaimer')
-    .forEach((el) => el.classList.add('launch-hidden'));
-  ui.normieSelectScreen.classList.remove('hidden');
-
-  if (ui.normieSelectStatus) ui.normieSelectStatus.textContent = 'Choose your Normie. Party members join during your adventure.';
-
-  ui.normieSelectGrid.innerHTML = normies.map((n) => `
-    <button class="normie-card" data-id="${n.id}" type="button">
-      <span class="nc-name">${n.name}</span>
-      <span class="nc-type">${n.type}</span>
-      <span class="nc-stat">HP ${n.maxHp} &middot; ATK ${n.atkBasic}</span>
-    </button>
-  `).join('');
-
-  ui.normieSelectGrid.querySelectorAll('.normie-card').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const id = Number(btn.dataset.id);
-      const chosen = normies.find((n) => n.id === id);
-      if (chosen) onPick(chosen);
-    });
-  });
-}
-
 async function launchDemoMode() {
   setLaunchStatus('Loading demo party...');
   try {
@@ -2083,11 +2160,75 @@ async function launchDemoMode() {
     updateHud();
   }
   exitLaunchOverlay();
-  // Unlock immediately + retry in case OverworldScene.create() hasn't fired yet
   setOverlayLock(false);
   setTimeout(() => setOverlayLock(false), 100);
   setTimeout(() => setOverlayLock(false), 600);
   try { await buildLeadNormieTexture(); } catch (err) { console.warn('[launchDemoMode] texture build failed:', err); }
+  autoLoad();
+}
+
+async function launchWithNormie(input) {
+  const trimmed = (input || '').trim();
+  if (!trimmed) { setLaunchStatus('Please enter a Normie ID or wallet address.'); return; }
+
+  // Determine if input is a number (Normie ID) or wallet address
+  const isId = /^\d+$/.test(trimmed);
+  const normieId = isId ? parseInt(trimmed, 10) : null;
+
+  setLaunchStatus(isId ? `Loading Normie #${normieId}...` : `Looking up address...`);
+
+  try {
+    let normie;
+    if (isId) {
+      normie = await fetchNormieFull(normieId);
+    } else {
+      // Treat as address — use address for save key, play with demo normie
+      STATE.identity.walletAddress = trimmed;
+      normie = await fetchNormieFull(6793);
+    }
+
+    STATE.party.roster = [normie];
+    STATE.party.leadId = normie.id;
+    STATE.identity.mode = isId ? 'normie' : 'address';
+    if (isId) STATE.identity.walletAddress = `normie_${normieId}`;
+    STATE.identity.walletName = isId ? `Normie #${normieId}` : trimmed.slice(0, 10);
+    applyLeadNormieStats();
+    if (gameRef) await buildLeadNormieTexture();
+    updateWalletStatus();
+    updateHud();
+    bus.emit('state-reloaded');
+    exitLaunchOverlay();
+    setOverlayLock(false);
+    setTimeout(() => setOverlayLock(false), 100);
+    setTimeout(() => setOverlayLock(false), 600);
+    autoLoad();
+  } catch (err) {
+    setLaunchStatus(`Failed to load: ${err.message}. Try demo mode.`);
+  }
+}
+
+// ── Address-based local save/load ─────────────────────────────────
+function autoSave() {
+  try {
+    localStorage.setItem(`normies-rpg:${slotKey()}`, JSON.stringify(cloudPayload()));
+  } catch (e) {
+    console.warn('autoSave failed:', e);
+  }
+}
+
+function autoLoad() {
+  try {
+    const raw = localStorage.getItem(`normies-rpg:${slotKey()}`);
+    if (!raw) return false;
+    const data = JSON.parse(raw);
+    if (applyCloudPayload(data)) {
+      showToast('Progress restored', 'info');
+      return true;
+    }
+  } catch (e) {
+    console.warn('autoLoad failed:', e);
+  }
+  return false;
 }
 
 ui.dialogueClose.addEventListener('click', () => {
@@ -2101,21 +2242,12 @@ ui.menuClose.addEventListener('click', closeMenu);
 ui.shopClose.addEventListener('click', closeShop);
 ui.btnSaveCloud.addEventListener('click', saveCloud);
 ui.btnLoadCloud.addEventListener('click', loadCloud);
-ui.walletConnect.addEventListener('click', openWalletModal);
-ui.walletDemo.addEventListener('click', hydrateDemoParty);
-ui.walletRefresh?.addEventListener('click', renderWalletChoices);
-ui.launchWallet?.addEventListener('click', openWalletModal);
+ui.launchPlay?.addEventListener('click', () => launchWithNormie(ui.normieIdInput?.value));
+ui.normieIdInput?.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') launchWithNormie(ui.normieIdInput.value);
+});
 ui.launchDemo?.addEventListener('click', launchDemoMode);
 ui.themeToggle?.addEventListener('click', toggleUiTheme);
-ui.launchThemeToggle?.addEventListener('click', toggleUiTheme);
-document.getElementById('wallet-modal-close')?.addEventListener('click', closeWalletModal);
-document.getElementById('wallet-modal')?.addEventListener('click', (e) => {
-  if (e.target === e.currentTarget) closeWalletModal();
-});
-document.getElementById('wallet-modal-demo')?.addEventListener('click', () => {
-  closeWalletModal();
-  launchDemoMode();
-});
 
 window.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
@@ -2145,8 +2277,7 @@ window.addEventListener('resize', () => {
 });
 
 initUiTheme();
-renderWalletChoices();
-updateHud('Verdant Town');
+updateHud('Your Bedroom');
 
 // D-pad mobile controls â€” container-based for reliable sliding, diagonals & multi-touch
 (function wireDpad() {

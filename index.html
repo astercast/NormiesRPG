@@ -8,7 +8,6 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="./phaser-style.css" />
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js"></script>
 </head>
 <body class="prelaunch">
 
@@ -18,28 +17,22 @@
       <h1 class="launch-title">NORMIES</h1>
       <p class="launch-sub">Your NFT. Your adventure.</p>
 
+      <div class="launch-input-group">
+        <label for="normie-id-input" class="launch-input-label">Enter Normie ID or Wallet Address</label>
+        <input type="text" id="normie-id-input" class="launch-input" placeholder="e.g. 6793 or 0xABC..." autocomplete="off" spellcheck="false" />
+      </div>
+
       <div class="launch-actions">
-        <button id="btn-launch-demo" class="btn-cta btn-cta-primary">
-          Play Free
+        <button id="btn-launch-play" class="btn-cta btn-cta-primary">
+          Play with your Normie
         </button>
-        <button id="btn-launch-wallet" class="btn-cta btn-cta-ghost">
-          Connect Wallet
+        <button id="btn-launch-demo" class="btn-cta btn-cta-ghost">
+          Play Free (Demo #6793)
         </button>
       </div>
 
       <p id="launch-status" class="launch-note"></p>
-
-      <!-- Hidden wallet picker — populated by JS for wallet flow -->
-      <div id="wallet-picker" class="launch-hidden"></div>
-
-      <!-- Normie selector shown after wallet connects -->
-      <div id="normie-select-screen" class="hidden">
-        <p id="normie-select-status" class="launch-eyebrow" style="margin-top:24px">Choose your Normie</p>
-        <div id="normie-select-grid" class="normie-select-grid"></div>
-      </div>
     </div>
-    <button id="btn-wallet-refresh" class="launch-hidden">Refresh</button>
-    <button id="btn-theme-toggle-launch" class="launch-hidden">Theme</button>
   </div>
 
   <!-- TOP HUD BAR -->
@@ -68,11 +61,9 @@
     </div>
     <div class="hud-right">
       <span id="wallet-status" class="hud-wallet">Demo</span>
-      <button id="btn-wallet-connect" class="hud-btn">Wallet</button>
       <button id="btn-theme-toggle" class="hud-btn">&#9680;</button>
     </div>
     <!-- hidden legacy refs -->
-    <button id="btn-wallet-demo" class="launch-hidden">Demo</button>
     <span id="eq-label" class="launch-hidden"></span>
     <span id="fps-label" class="launch-hidden"></span>
   </header>
@@ -205,22 +196,6 @@
     <div class="mob-actions">
       <button id="btn-m-interact" class="mob-act-btn">TALK</button>
       <button id="btn-m-menu"     class="mob-act-btn">BAG</button>
-    </div>
-  </div>
-
-  <!-- WALLET MODAL -->
-  <div id="wallet-modal" class="wallet-modal hidden">
-    <div class="wallet-modal-card">
-      <div class="wallet-modal-header">
-        <span class="wallet-modal-title">Connect Wallet</span>
-        <button id="wallet-modal-close" class="panel-close">&times;</button>
-      </div>
-      <p class="wallet-modal-sub">Choose your wallet to play with your own Normies NFT</p>
-      <div id="wallet-modal-grid" class="wallet-modal-grid"></div>
-      <p id="wallet-modal-error" class="wallet-modal-error"></p>
-      <div class="wallet-modal-footer">
-        Don't have a Normie? <button class="wallet-modal-demo-link" id="wallet-modal-demo">Play free demo instead</button>
-      </div>
     </div>
   </div>
 

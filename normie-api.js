@@ -46,6 +46,56 @@ export async function fetchNormiePixels(id) {
   return pxStr;
 }
 
+/**
+ * Parse the inline SVG from metadata `image` field into a 40×40 color array.
+ * The SVG contains <rect> elements with fill colors on a background.
+ * Returns array of 1600 hex strings, or null if parsing fails.
+ */
+export function parseSvgColors(meta) {
+  if (!meta?.image) return null;
+  try {
+    // image field is "data:image/svg+xml;base64,..." 
+    const b64Match = meta.image.match(/base64,(.+)/);
+    if (!b64Match) return null;
+    const svgText = atob(b64Match[1]);
+
+    // Extract background fill from the first large rect (covers full canvas)
+    const bgMatch = svgText.match(/<rect[^>]*width="40"[^>]*height="40"[^>]*fill="([^"]+)"/);
+    const bgColor = bgMatch ? bgMatch[1].toLowerCase() : '#e3e5e4';
+
+    // Build a 40×40 grid initialized to background
+    const W = 40, H = 40;
+    const grid = new Array(W * H).fill(bgColor);
+
+    // Parse all <rect> elements with position and fill
+    const rectRe = /<rect\s+x="(\d+)"\s+y="(\d+)"\s+width="(\d+)"\s+height="(\d+)"\s+fill="([^"]+)"/g;
+    let m;
+    while ((m = rectRe.exec(svgText)) !== null) {
+      const rx = parseInt(m[1], 10);
+      const ry = parseInt(m[2], 10);
+      const rw = parseInt(m[3], 10);
+      const rh = parseInt(m[4], 10);
+      const fill = m[5];
+      if (fill.toLowerCase() === bgColor) continue; // skip background rects
+      for (let dy = 0; dy < rh; dy++) {
+        for (let dx = 0; dx < rw; dx++) {
+          const px = rx + dx, py = ry + dy;
+          if (px < W && py < H) grid[py * W + px] = fill;
+        }
+      }
+    }
+
+    // Check if we actually found colored pixels (not just background)
+    const hasColors = grid.some(c => c.toLowerCase() !== bgColor);
+    if (!hasColors) return null;
+
+    return grid;
+  } catch (e) {
+    console.warn('parseSvgColors failed:', e);
+    return null;
+  }
+}
+
 export function calcStats(meta, pixelStr, lv=1) {
   const attrs = meta.attributes || [];
   const get = (k) => attrs.find(a => a.trait_type === k)?.value || '';
@@ -143,8 +193,9 @@ export function calcStats(meta, pixelStr, lv=1) {
 export async function fetchNormieFull(id) {
   try {
     const [meta, pixData] = await Promise.all([fetchNormieMeta(id), fetchNormiePixels(id)]);
-    // pixData is already canonicalized by fetchNormiePixels (array or string)
-    const pixelStr = pixData || '';
+    // Try to extract real colors from SVG in metadata first
+    const svgColors = parseSvgColors(meta);
+    const pixelStr = svgColors || pixData || '';
     const stats = calcStats(meta, pixelStr);
     const name = meta.name || `Normie #${id}`;
     return {
