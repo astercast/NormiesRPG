@@ -694,208 +694,154 @@ function tintFromLead() {
   return partyTintByType(lead?.type);
 }
 
-class BootScene extends Phaser.Scene {
-  constructor() {
-    super('BootScene');
-    this.hasExternalArt = false;
+// ─────────────────────────────────────────────────────────────────────────────
+// Procedural texture builders — pure DOM canvas, no Phaser API.
+// Converted to data-URLs and fed into load.image / load.spritesheet so Phaser
+// handles the full WebGL upload pipeline (the only reliable cross-GPU path).
+// ─────────────────────────────────────────────────────────────────────────────
+function buildTileCanvas() {
+  const cv = document.createElement('canvas');
+  cv.width = 128; cv.height = 128;
+  const ctx = cv.getContext('2d');
+  const S = 32;
+  const tile = (tx, ty, base, detail, grid) => {
+    const x = tx * S; const y = ty * S;
+    ctx.fillStyle = base; ctx.fillRect(x, y, S, S);
+    if (detail) {
+      ctx.fillStyle = detail;
+      for (let dy = 4; dy < S - 4; dy += 8)
+        for (let dx = 4; dx < S - 4; dx += 8)
+          ctx.fillRect(x + dx, y + dy, 2, 2);
+    }
+    if (grid) {
+      ctx.fillStyle = grid;
+      ctx.fillRect(x, y + S - 1, S, 1);
+      ctx.fillRect(x + S - 1, y, 1, S);
+    }
+  };
+  tile(0, 0, '#b4bec0', '#c8d2d4', '#9eaaac'); // ID 1 – overworld ground
+  tile(1, 0, '#8a989c', '#9aacb0', '#7a8890');
+  tile(2, 0, '#6a7478', '#7a8488', '#5a666a');
+  tile(3, 0, '#2a3038', '#343c44', '#1e262e');
+  tile(0, 1, '#c0cac8', '#d0d8d6', '#a8b4b2'); // ID 5 – town ground
+  tile(1, 1, '#848e8c', '#949e9c', '#747e7c');
+  tile(2, 1, '#484e54', '#585e64', '#383e44');
+  tile(3, 1, '#dce4e4', '#eaf0f0', '#c8d0d0');
+  tile(0, 2, '#1a2028', '#242a32', '#121820');
+  tile(1, 2, '#243038', '#2e3c44', '#18242c');
+  tile(2, 2, '#303840', '#3c444c', '#242c34');
+  tile(3, 2, '#3c4450', '#48505c', '#30383c');
+  tile(0, 3, '#18242e', '#204050', '#101c24');
+  tile(1, 3, '#204858', '#286070', '#18404e');
+  tile(2, 3, '#10181e', '#181e26', '#0c1016');
+  tile(3, 3, '#e8e8e8', '#f4f4f4', '#cccccc');
+  return cv;
+}
+
+function buildPlayerCanvas() {
+  const cv = document.createElement('canvas');
+  cv.width = 96; cv.height = 128;
+  const ctx = cv.getContext('2d');
+  const drawFrame = (col, row, legL = 0, legR = 0) => {
+    const x = col * 32; const y = row * 32;
+    ctx.fillStyle = 'rgba(0,0,0,0.28)'; ctx.fillRect(x + 10, y + 29, 12, 2);
+    ctx.fillStyle = '#8090a0';
+    ctx.fillRect(x + 12, y + 22, 4, 7 + legL);
+    ctx.fillRect(x + 16, y + 22, 4, 7 + legR);
+    ctx.fillStyle = '#404850';
+    ctx.fillRect(x + 12, y + 26 + legL, 4, 3);
+    ctx.fillRect(x + 16, y + 26 + legR, 4, 3);
+    ctx.fillStyle = '#1e242a'; ctx.fillRect(x + 9,  y + 11, 14, 12);
+    ctx.fillStyle = '#606870'; ctx.fillRect(x + 10, y + 12, 12, 10);
+    ctx.fillStyle = '#8090a0'; ctx.fillRect(x + 11, y + 13,  4,  4);
+    ctx.fillStyle = '#606870';
+    ctx.fillRect(x + 6,  y + 12, 4, 6);
+    ctx.fillRect(x + 22, y + 12, 4, 6);
+    ctx.fillStyle = '#1e242a'; ctx.fillRect(x + 10, y + 3, 12, 10);
+    ctx.fillStyle = '#d4d8dc'; ctx.fillRect(x + 11, y + 4, 10,  8);
+    ctx.fillStyle = '#1a2028'; ctx.fillRect(x + 11, y + 6, 10,  3);
+    ctx.fillStyle = '#c8e8ff';
+    ctx.fillRect(x + 12, y + 7, 3, 1);
+    ctx.fillRect(x + 17, y + 7, 3, 1);
+  };
+  for (let row = 0; row < 4; row += 1) {
+    drawFrame(0, row, 0, 0);
+    drawFrame(1, row, 3, -1);
+    drawFrame(2, row, -1, 3);
   }
+  return cv;
+}
+
+function buildNpcCanvas() {
+  const cv = document.createElement('canvas');
+  cv.width = 96; cv.height = 32;
+  const ctx = cv.getContext('2d');
+  for (let i = 0; i < 3; i += 1) {
+    const x = i * 32; const bob = i === 1 ? -1 : 0;
+    ctx.fillStyle = '#1e2a22'; ctx.fillRect(x + 8, 13 + bob, 16, 14);
+    ctx.fillStyle = '#3a5040'; ctx.fillRect(x + 9, 14 + bob, 14, 12);
+    ctx.fillStyle = '#1e2420'; ctx.fillRect(x + 10, 3 + bob, 12, 11);
+    ctx.fillStyle = '#c8b8a0'; ctx.fillRect(x + 11, 4 + bob, 10,  9);
+    ctx.fillStyle = '#201c18';
+    ctx.fillRect(x + 13, 6 + bob, 2, 2);
+    ctx.fillRect(x + 17, 6 + bob, 2, 2);
+    ctx.fillStyle = '#2a3828'; ctx.fillRect(x + 10, 3 + bob, 12, 3);
+    ctx.fillStyle = '#8a6840'; ctx.fillRect(x + 22, 8 + bob,  2, 18);
+  }
+  return cv;
+}
+
+function buildEnemyCanvas() {
+  const cv = document.createElement('canvas');
+  cv.width = 96; cv.height = 32;
+  const ctx = cv.getContext('2d');
+  for (let i = 0; i < 3; i += 1) {
+    const x = i * 32; const p = i === 1 ? -1 : (i === 2 ? 1 : 0);
+    ctx.fillStyle = '#1e0e18';
+    ctx.fillRect(x + 4,  14 + p, 4, 10);
+    ctx.fillRect(x + 24, 14 + p, 4, 10);
+    ctx.fillStyle = '#120a10'; ctx.fillRect(x + 6,  8 + p, 20, 18);
+    ctx.fillStyle = '#2a1828'; ctx.fillRect(x + 7,  9 + p, 18, 16);
+    ctx.fillStyle = '#3c2438'; ctx.fillRect(x + 9,  10 + p, 6,  8);
+    ctx.fillStyle = '#1a0e18'; ctx.fillRect(x + 9,  3 + p, 14, 10);
+    ctx.fillStyle = '#301828'; ctx.fillRect(x + 10, 4 + p, 12,  8);
+    ctx.fillStyle = '#f0f8ff';
+    ctx.fillRect(x + 11, 6 + p, 4, 3);
+    ctx.fillRect(x + 17, 6 + p, 4, 3);
+    ctx.fillStyle = '#60b8ff';
+    ctx.fillRect(x + 12, 7 + p, 2, 1);
+    ctx.fillRect(x + 18, 7 + p, 2, 1);
+  }
+  return cv;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+class BootScene extends Phaser.Scene {
+  constructor() { super('BootScene'); }
 
   preload() {
-    // Only load map data — sprites/tiles are generated at runtime so there
-    // are no external file dependencies that can break rendering.
     this.load.tilemapTiledJSON('overworld', 'assets/maps/overworld.json');
-    this.load.tilemapTiledJSON('town', 'assets/maps/town.json');
-    this.load.tilemapTiledJSON('ruins', 'assets/maps/ruins.json');
+    this.load.tilemapTiledJSON('town',      'assets/maps/town.json');
+    this.load.tilemapTiledJSON('ruins',     'assets/maps/ruins.json');
+
+    // Load procedural art as data-URLs — goes through Phaser's full image
+    // pipeline, which guarantees correct WebGL texture upload on all GPUs.
+    this.load.image(ART_KEYS.tiles, buildTileCanvas().toDataURL());
+    this.load.spritesheet(ART_KEYS.player, buildPlayerCanvas().toDataURL(), { frameWidth: 32, frameHeight: 32 });
+    this.load.spritesheet(ART_KEYS.npc,    buildNpcCanvas().toDataURL(),    { frameWidth: 32, frameHeight: 32 });
+    this.load.spritesheet(ART_KEYS.enemy,  buildEnemyCanvas().toDataURL(),  { frameWidth: 32, frameHeight: 32 });
   }
 
   create() {
-    this.generateTileTexture();
-    this.generatePlayerSheet();
-    this.generateNpcSheet();
-    this.generateEnemySheet();
-    this.createAnimations();
+    this.anims.create({ key: 'player-down',  frames: this.anims.generateFrameNumbers(ART_KEYS.player, { frames: [0, 1, 2]   }), frameRate: 9, repeat: -1 });
+    this.anims.create({ key: 'player-left',  frames: this.anims.generateFrameNumbers(ART_KEYS.player, { frames: [3, 4, 5]   }), frameRate: 9, repeat: -1 });
+    this.anims.create({ key: 'player-right', frames: this.anims.generateFrameNumbers(ART_KEYS.player, { frames: [6, 7, 8]   }), frameRate: 9, repeat: -1 });
+    this.anims.create({ key: 'player-up',    frames: this.anims.generateFrameNumbers(ART_KEYS.player, { frames: [9, 10, 11] }), frameRate: 9, repeat: -1 });
+    this.anims.create({ key: 'npc-idle',     frames: this.anims.generateFrameNumbers(ART_KEYS.npc,    { frames: [0, 1, 2]   }), frameRate: 4, repeat: -1 });
+    this.anims.create({ key: 'enemy-idle',   frames: this.anims.generateFrameNumbers(ART_KEYS.enemy,  { frames: [0, 1, 2]   }), frameRate: 5, repeat: -1 });
+
     this.scene.start('OverworldScene');
     this.scene.launch('UIScene');
-  }
-
-  generateTileTexture() {
-    // Use Phaser's createCanvas API so the texture is properly uploaded to
-    // the GPU (calling refresh() does an explicit WebGL texture update).
-    const ct = this.textures.createCanvas(ART_KEYS.tiles, 128, 128);
-    const ctx = ct.context;
-    const S = 32;
-
-    const tile = (tx, ty, base, detail, grid) => {
-      const x = tx * S; const y = ty * S;
-      ctx.fillStyle = base;
-      ctx.fillRect(x, y, S, S);
-      if (detail) {
-        ctx.fillStyle = detail;
-        for (let dy = 4; dy < S - 4; dy += 8)
-          for (let dx = 4; dx < S - 4; dx += 8)
-            ctx.fillRect(x + dx, y + dy, 2, 2);
-      }
-      if (grid) {
-        ctx.fillStyle = grid;
-        ctx.fillRect(x, y + S - 1, S, 1);
-        ctx.fillRect(x + S - 1, y, 1, S);
-      }
-    };
-
-    // Row 0 — outdoor ground tiles (IDs 1-4)
-    tile(0, 0, '#b4bec0', '#c8d2d4', '#9eaaac'); // ID 1 – overworld main floor
-    tile(1, 0, '#8a989c', '#9aacb0', '#7a8890');
-    tile(2, 0, '#6a7478', '#7a8488', '#5a666a');
-    tile(3, 0, '#2a3038', '#343c44', '#1e262e');
-
-    // Row 1 — indoor / town tiles (IDs 5-8)
-    tile(0, 1, '#c0cac8', '#d0d8d6', '#a8b4b2'); // ID 5 – town main floor
-    tile(1, 1, '#848e8c', '#949e9c', '#747e7c');
-    tile(2, 1, '#484e54', '#585e64', '#383e44');
-    tile(3, 1, '#dce4e4', '#eaf0f0', '#c8d0d0');
-
-    // Row 2 — walls (IDs 9-12)
-    tile(0, 2, '#1a2028', '#242a32', '#121820');
-    tile(1, 2, '#243038', '#2e3c44', '#18242c');
-    tile(2, 2, '#303840', '#3c444c', '#242c34');
-    tile(3, 2, '#3c4450', '#48505c', '#30383c');
-
-    // Row 3 — water / special (IDs 13-16)
-    tile(0, 3, '#18242e', '#204050', '#101c24');
-    tile(1, 3, '#204858', '#286070', '#18404e');
-    tile(2, 3, '#10181e', '#181e26', '#0c1016');
-    tile(3, 3, '#e8e8e8', '#f4f4f4', '#cccccc');
-
-    ct.refresh();
-  }
-
-  generatePlayerSheet() {
-    const ct = this.textures.createCanvas(ART_KEYS.player, 96, 128);
-    const ctx = ct.context;
-
-    const drawFrame = (col, row, legL = 0, legR = 0) => {
-      const x = col * 32;
-      const y = row * 32;
-
-      ctx.fillStyle = 'rgba(0,0,0,0.28)';
-      ctx.fillRect(x + 10, y + 29, 12, 2);
-
-      ctx.fillStyle = '#8090a0';
-      ctx.fillRect(x + 12, y + 22, 4, 7 + legL);
-      ctx.fillRect(x + 16, y + 22, 4, 7 + legR);
-      ctx.fillStyle = '#404850';
-      ctx.fillRect(x + 12, y + 26 + legL, 4, 3);
-      ctx.fillRect(x + 16, y + 26 + legR, 4, 3);
-
-      ctx.fillStyle = '#1e242a';
-      ctx.fillRect(x + 9, y + 11, 14, 12);
-      ctx.fillStyle = '#606870';
-      ctx.fillRect(x + 10, y + 12, 12, 10);
-      ctx.fillStyle = '#8090a0';
-      ctx.fillRect(x + 11, y + 13, 4, 4);
-
-      ctx.fillStyle = '#606870';
-      ctx.fillRect(x + 6, y + 12, 4, 6);
-      ctx.fillRect(x + 22, y + 12, 4, 6);
-
-      ctx.fillStyle = '#1e242a';
-      ctx.fillRect(x + 10, y + 3, 12, 10);
-      ctx.fillStyle = '#d4d8dc';
-      ctx.fillRect(x + 11, y + 4, 10, 8);
-      ctx.fillStyle = '#1a2028';
-      ctx.fillRect(x + 11, y + 6, 10, 3);
-      ctx.fillStyle = '#c8e8ff';
-      ctx.fillRect(x + 12, y + 7, 3, 1);
-      ctx.fillRect(x + 17, y + 7, 3, 1);
-    };
-
-    for (let row = 0; row < 4; row += 1) {
-      drawFrame(0, row, 0, 0);
-      drawFrame(1, row, 3, -1);
-      drawFrame(2, row, -1, 3);
-    }
-
-    ct.refresh();
-    // Add numbered frames (3 cols × 4 rows = 12 frames)
-    for (let i = 0; i < 12; i += 1) {
-      ct.add(i, 0, (i % 3) * 32, Math.floor(i / 3) * 32, 32, 32);
-    }
-  }
-
-  generateNpcSheet() {
-    const ct = this.textures.createCanvas(ART_KEYS.npc, 96, 32);
-    const ctx = ct.context;
-
-    for (let i = 0; i < 3; i += 1) {
-      const x = i * 32;
-      const bob = i === 1 ? -1 : 0;
-
-      ctx.fillStyle = '#1e2a22';
-      ctx.fillRect(x + 8, 13 + bob, 16, 14);
-      ctx.fillStyle = '#3a5040';
-      ctx.fillRect(x + 9, 14 + bob, 14, 12);
-
-      ctx.fillStyle = '#1e2420';
-      ctx.fillRect(x + 10, 3 + bob, 12, 11);
-      ctx.fillStyle = '#c8b8a0';
-      ctx.fillRect(x + 11, 4 + bob, 10, 9);
-      ctx.fillStyle = '#201c18';
-      ctx.fillRect(x + 13, 6 + bob, 2, 2);
-      ctx.fillRect(x + 17, 6 + bob, 2, 2);
-      ctx.fillStyle = '#2a3828';
-      ctx.fillRect(x + 10, 3 + bob, 12, 3);
-
-      ctx.fillStyle = '#8a6840';
-      ctx.fillRect(x + 22, 8 + bob, 2, 18);
-    }
-
-    ct.refresh();
-    for (let i = 0; i < 3; i += 1) ct.add(i, 0, i * 32, 0, 32, 32);
-  }
-
-  generateEnemySheet() {
-    const ct = this.textures.createCanvas(ART_KEYS.enemy, 96, 32);
-    const ctx = ct.context;
-
-    for (let i = 0; i < 3; i += 1) {
-      const x = i * 32;
-      const pulse = i === 1 ? -1 : (i === 2 ? 1 : 0);
-
-      ctx.fillStyle = '#1e0e18';
-      ctx.fillRect(x + 4, 14 + pulse, 4, 10);
-      ctx.fillRect(x + 24, 14 + pulse, 4, 10);
-
-      ctx.fillStyle = '#120a10';
-      ctx.fillRect(x + 6, 8 + pulse, 20, 18);
-      ctx.fillStyle = '#2a1828';
-      ctx.fillRect(x + 7, 9 + pulse, 18, 16);
-      ctx.fillStyle = '#3c2438';
-      ctx.fillRect(x + 9, 10 + pulse, 6, 8);
-
-      ctx.fillStyle = '#1a0e18';
-      ctx.fillRect(x + 9, 3 + pulse, 14, 10);
-      ctx.fillStyle = '#301828';
-      ctx.fillRect(x + 10, 4 + pulse, 12, 8);
-
-      ctx.fillStyle = '#f0f8ff';
-      ctx.fillRect(x + 11, 6 + pulse, 4, 3);
-      ctx.fillRect(x + 17, 6 + pulse, 4, 3);
-      ctx.fillStyle = '#60b8ff';
-      ctx.fillRect(x + 12, 7 + pulse, 2, 1);
-      ctx.fillRect(x + 18, 7 + pulse, 2, 1);
-    }
-
-    ct.refresh();
-    for (let i = 0; i < 3; i += 1) ct.add(i, 0, i * 32, 0, 32, 32);
-  }
-
-  createAnimations() {
-    this.anims.create({ key: 'player-down', frames: this.anims.generateFrameNumbers(ART_KEYS.player, { frames: [0, 1, 2] }), frameRate: 9, repeat: -1 });
-    this.anims.create({ key: 'player-left', frames: this.anims.generateFrameNumbers(ART_KEYS.player, { frames: [3, 4, 5] }), frameRate: 9, repeat: -1 });
-    this.anims.create({ key: 'player-right', frames: this.anims.generateFrameNumbers(ART_KEYS.player, { frames: [6, 7, 8] }), frameRate: 9, repeat: -1 });
-    this.anims.create({ key: 'player-up', frames: this.anims.generateFrameNumbers(ART_KEYS.player, { frames: [9, 10, 11] }), frameRate: 9, repeat: -1 });
-    this.anims.create({ key: 'npc-idle', frames: this.anims.generateFrameNumbers(ART_KEYS.npc, { frames: [0, 1, 2] }), frameRate: 4, repeat: -1 });
-    this.anims.create({ key: 'enemy-idle', frames: this.anims.generateFrameNumbers(ART_KEYS.enemy, { frames: [0, 1, 2] }), frameRate: 5, repeat: -1 });
   }
 }
 
@@ -1442,7 +1388,7 @@ gameRef = new Phaser.Game({
   parent: 'game-root',
   width: window.innerWidth,
   height: window.innerHeight,
-  backgroundColor: '#0e1820',
+  backgroundColor: '#111110',
   scene: [BootScene, OverworldScene, BattleScene, UIScene],
   physics: { default: 'arcade', arcade: { debug: false } },
   render: { pixelArt: true, antialias: false, roundPixels: true },
