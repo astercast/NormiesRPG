@@ -8,8 +8,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js"></script>
-  <script type="module" crossorigin src="./assets/main-CKjl3CG4.js"></script>
-  <link rel="stylesheet" crossorigin href="./assets/main-D4FaWV0w.css">
+  <script type="module" crossorigin src="./assets/main-BaIDK01Z.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/main-C3yk19Af.css">
 </head>
 <body class="prelaunch">
 
@@ -206,6 +206,22 @@
     <div class="mob-actions">
       <button id="btn-m-interact" class="mob-act-btn">TALK</button>
       <button id="btn-m-menu"     class="mob-act-btn">BAG</button>
+    </div>
+  </div>
+
+  <!-- WALLET MODAL -->
+  <div id="wallet-modal" class="wallet-modal hidden">
+    <div class="wallet-modal-card">
+      <div class="wallet-modal-header">
+        <span class="wallet-modal-title">Connect Wallet</span>
+        <button id="wallet-modal-close" class="panel-close">&times;</button>
+      </div>
+      <p class="wallet-modal-sub">Choose your wallet to play with your own Normies NFT</p>
+      <div id="wallet-modal-grid" class="wallet-modal-grid"></div>
+      <p id="wallet-modal-error" class="wallet-modal-error"></p>
+      <div class="wallet-modal-footer">
+        Don't have a Normie? <button class="wallet-modal-demo-link" id="wallet-modal-demo">Play free demo instead</button>
+      </div>
     </div>
   </div>
 

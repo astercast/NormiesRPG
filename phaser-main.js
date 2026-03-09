@@ -396,41 +396,54 @@ function walletErrorMessage(err) {
   return `Wallet connect failed: ${code}`;
 }
 
-function renderWalletChoices() {
-  if (!ui.walletPicker) return;
-
+// ── Wallet modal ──────────────────────────────────────────────
+function openWalletModal() {
   detectedWallets = detectWallets();
-  ui.walletPicker.innerHTML = '';
+  const modal = document.getElementById('wallet-modal');
+  const grid  = document.getElementById('wallet-modal-grid');
+  const err   = document.getElementById('wallet-modal-error');
+  if (!modal || !grid) return;
+  err.textContent = '';
 
-  if (!detectedWallets.length) {
-    selectedWalletId = null;
-    if (ui.launchWallet) ui.launchWallet.disabled = true;
-    ui.walletPicker.innerHTML = '<div class="wallet-empty">No injected wallet detected. Install MetaMask, Coinbase Wallet, Rabby, or use Demo Mode.</div>';
-    setLaunchStatus('No wallet detected. You can still play instantly in demo mode.');
-    return;
-  }
+  const ALL_WALLETS = [
+    { id: 'metamask',  name: 'MetaMask',        icon: '🦊', detect: () => !!window.ethereum?.isMetaMask },
+    { id: 'coinbase',  name: 'Coinbase Wallet',  icon: '🔵', detect: () => !!window.ethereum?.isCoinbaseWallet },
+    { id: 'rabby',     name: 'Rabby',            icon: '🐰', detect: () => !!window.ethereum?.isRabby },
+    { id: 'brave',     name: 'Brave Wallet',     icon: '🦁', detect: () => !!window.ethereum?.isBraveWallet },
+    { id: 'injected',  name: 'Browser Wallet',   icon: '🌐', detect: () => !!window.ethereum },
+    { id: 'walletconnect', name: 'WalletConnect', icon: '🔗', detect: () => false },
+  ];
 
-  const preferred = selectedWalletId && detectedWallets.some((w) => w.id === selectedWalletId)
-    ? selectedWalletId
-    : detectedWallets[0].id;
-
-  selectedWalletId = preferred;
-  detectedWallets.forEach((wallet) => {
-    const button = document.createElement('button');
-    button.className = `wallet-choice${wallet.id === selectedWalletId ? ' active' : ''}`;
-    button.type = 'button';
-    button.dataset.walletId = wallet.id;
-    button.innerHTML = `<span class="wallet-choice-name">${wallet.name}</span><span class="wallet-choice-tag">${wallet.id}</span>`;
-    button.addEventListener('click', () => {
-      selectedWalletId = wallet.id;
-      renderWalletChoices();
+  grid.innerHTML = '';
+  ALL_WALLETS.forEach((w) => {
+    const available = detectedWallets.some((d) => d.id === w.id) || w.detect();
+    const btn = document.createElement('button');
+    btn.className = 'wm-option' + (available ? '' : ' wm-unavailable');
+    btn.type = 'button';
+    btn.innerHTML = `<span class="wm-icon">${w.icon}</span><span class="wm-name">${w.name}</span>${available ? '' : '<span class="wm-tag">Not installed</span>'}`;
+    btn.addEventListener('click', async () => {
+      if (!available) {
+        err.textContent = `${w.name} is not installed in this browser.`;
+        return;
+      }
+      err.textContent = 'Connecting...';
+      closeWalletModal();
+      await hydrateWalletParty(w.id);
     });
-    ui.walletPicker.appendChild(button);
+    grid.appendChild(btn);
   });
 
+  modal.classList.remove('hidden');
+}
+
+function closeWalletModal() {
+  document.getElementById('wallet-modal')?.classList.add('hidden');
+}
+
+function renderWalletChoices() {
+  // Legacy — kept for compatibility but wallet flow now uses openWalletModal()
+  detectedWallets = detectWallets();
   if (ui.launchWallet) ui.launchWallet.disabled = false;
-  const selected = detectedWallets.find((w) => w.id === selectedWalletId);
-  setLaunchStatus(`Selected provider: ${selected?.name || 'Wallet'}.`);
 }
 
 function exitLaunchOverlay() {
@@ -1126,7 +1139,7 @@ const MAP_DEFS = {
   town: {
     w: 36, h: 30,
     ground: buildTownMap(),
-    spawn: { from_overworld: { col: 18, row: 14 } },
+    spawn: { from_overworld: { col: 18, row: 16 } },
     warps:     [{ col: 15, row: 28, cols: 6, rows: 2, targetMap: 'overworld', targetSpawn: 'from_town' }],
     npcs:      [{ id: 'elder', col: 8, row: 12 }, { id: 'smith', col: 26, row: 12 }, { id: 'merchant', col: 8, row: 17 }, { id: 'scout', col: 26, row: 17 }],
     encounters: [],
@@ -1408,6 +1421,7 @@ class OverworldScene extends Phaser.Scene {
 
   create() {
     overworldRef = this;
+    this.overlayLocked = true; // locked until a Normie is chosen and game is ready
     this.physics.world.setFPS(60);
     this.keys = this.input.keyboard.addKeys('W,A,S,D,UP,DOWN,LEFT,RIGHT,SHIFT,E,I');
 
@@ -1451,6 +1465,8 @@ class OverworldScene extends Phaser.Scene {
       this.loadMap(STATE.world.mapId, STATE.world.spawnName);
       if (this.player.texture.key === ART_KEYS.player) this.player.anims.play('player-down', true);
       else this.player.anims.stop();
+      // Unlock movement now that a Normie is loaded and the game has started
+      this.overlayLocked = false;
     });
 
     bus.on('lead-changed', () => {
@@ -1996,13 +2012,21 @@ ui.menuClose.addEventListener('click', closeMenu);
 ui.shopClose.addEventListener('click', closeShop);
 ui.btnSaveCloud.addEventListener('click', saveCloud);
 ui.btnLoadCloud.addEventListener('click', loadCloud);
-ui.walletConnect.addEventListener('click', hydrateWalletParty);
+ui.walletConnect.addEventListener('click', openWalletModal);
 ui.walletDemo.addEventListener('click', hydrateDemoParty);
 ui.walletRefresh?.addEventListener('click', renderWalletChoices);
-ui.launchWallet?.addEventListener('click', () => hydrateWalletParty(selectedWalletId));
+ui.launchWallet?.addEventListener('click', openWalletModal);
 ui.launchDemo?.addEventListener('click', launchDemoMode);
 ui.themeToggle?.addEventListener('click', toggleUiTheme);
 ui.launchThemeToggle?.addEventListener('click', toggleUiTheme);
+document.getElementById('wallet-modal-close')?.addEventListener('click', closeWalletModal);
+document.getElementById('wallet-modal')?.addEventListener('click', (e) => {
+  if (e.target === e.currentTarget) closeWalletModal();
+});
+document.getElementById('wallet-modal-demo')?.addEventListener('click', () => {
+  closeWalletModal();
+  launchDemoMode();
+});
 
 window.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {

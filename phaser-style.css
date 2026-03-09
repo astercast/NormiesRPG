@@ -1311,3 +1311,109 @@ body.prelaunch .mobile-btns {
   .launch-card { padding: 36px 20px 32px; }
   .quest-banner{ font-size: 10px; max-width: 90vw; }
 }
+
+/* ═══════════════════════════════════════════════════
+   WALLET CONNECT MODAL
+═══════════════════════════════════════════════════ */
+.wallet-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: rgba(0, 0, 0, 0.65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+.wallet-modal.hidden { display: none; }
+
+.wallet-modal-card {
+  width: min(440px, 100%);
+  background: var(--surface);
+  border: 1px solid var(--border-hi);
+  padding: 28px 24px 20px;
+  animation: panelIn 180ms cubic-bezier(.22, .68, 0, 1.1);
+}
+
+.wallet-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+.wallet-modal-title {
+  font-family: var(--font-brand);
+  font-size: 22px;
+  letter-spacing: 0.06em;
+  color: var(--text);
+}
+.wallet-modal-sub {
+  font-size: 11px;
+  color: var(--muted);
+  margin: 6px 0 18px;
+  line-height: 1.4;
+}
+.wallet-modal-error {
+  font-size: 11px;
+  color: #e05b5b;
+  min-height: 16px;
+  margin-top: 14px;
+}
+.wallet-modal-footer {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 16px;
+  text-align: center;
+}
+.wallet-modal-demo-link {
+  background: none;
+  border: none;
+  color: var(--text);
+  font-size: 11px;
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 0;
+}
+.wallet-modal-demo-link:hover { opacity: 0.7; }
+
+.wallet-modal-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.wm-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 18px 10px 14px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  cursor: pointer;
+  transition: border-color 100ms, background 100ms;
+  font-family: inherit;
+}
+.wm-option:hover {
+  border-color: var(--border-hi);
+  background: #2a2a28;
+}
+.wm-unavailable {
+  opacity: 0.4;
+  cursor: default;
+}
+.wm-unavailable:hover {
+  border-color: var(--border);
+  background: var(--surface-2);
+}
+
+.wm-icon { font-size: 30px; line-height: 1; }
+.wm-name { font-size: 12px; font-weight: 700; letter-spacing: 0.02em; }
+.wm-tag  { font-size: 9px; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; }
+
+@media (max-width: 400px) {
+  .wallet-modal-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .wm-option { padding: 14px 6px 10px; }
+  .wm-icon { font-size: 24px; }
+}
