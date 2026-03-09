@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+﻿import Phaser from 'phaser';
 import { connectWallet, loadWalletNormies, loadDemoNormies, detectWallets } from './wallet.js';
 import { makeDemoNormie, fetchNormieFull } from './normie-api.js';
 import {
@@ -27,10 +27,12 @@ const ART_KEYS = {
 };
 
 const NPCS = {
-  elder: { name: 'Elder Vex' },
-  smith: { name: 'Forge Ada' },
-  scout: { name: 'Scout Nori' },
+  elder:    { name: 'Elder Vex' },
+  smith:    { name: 'Forge Ada' },
+  scout:    { name: 'Scout Nori' },
   merchant: { name: 'Merchant Zen' },
+  mom_up:   { name: 'Mom' },
+  mom_down: { name: 'Mom' },
 };
 
 const ENEMIES_BY_TIER = {
@@ -99,8 +101,8 @@ const STATE = {
     leadId: null,
   },
   world: {
-    mapId: 'town',
-    spawnName: 'from_overworld',
+    mapId: 'home',
+    spawnName: 'spawn',
   },
   quest: {
     step: 0,
@@ -179,7 +181,7 @@ const ui = {
   saveStatus: document.getElementById('save-status'),
 };
 
-// ── Tab wiring (runs once DOM is ready) ──────────────────────────
+// â”€â”€ Tab wiring (runs once DOM is ready) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 (function wireMenuTabs() {
   const tabs  = document.querySelectorAll('.inv-tab');
   const panes = document.querySelectorAll('.inv-pane');
@@ -232,10 +234,14 @@ function leadNormie() {
 }
 
 /**
- * Renders a Normie pixel-string onto a canvas using flood-fill exterior detection
- * so the full body is correctly filled (not just a 1px ring inside the outline).
- * @param {string} pixels  40×40 bitmap string of '0'/'1'
- * @param {number} size    output pixel size (should be a multiple of 40)
+ * Renders a Normie onto a canvas.
+ * Accepts two pixel formats:
+ *   1. Array of 1600 hex color strings (['#rrggbb', ...]) â€” renders real NFT colors,
+ *      skipping near-white background pixels (r+g+b > 660).
+ *   2. Binary string of 1600 '0'/'1' chars â€” flood-fill interior as skin, outline dark.
+ * @param {string|string[]} pixels  pixel data
+ * @param {number}          size    output canvas size (px, should be multiple of 40)
+ * @param {string}          [fillColor]  skin fill for binary mode
  * @returns {HTMLCanvasElement}
  */
 function buildNormiePortraitCanvas(pixels, size, fillColor) {
@@ -245,10 +251,27 @@ function buildNormiePortraitCanvas(pixels, size, fillColor) {
   cv.width = W * S; cv.height = H * S;
   const ctx = cv.getContext('2d');
   ctx.clearRect(0, 0, cv.width, cv.height);
+
+  // â”€â”€ Mode 1: real colour array from the NFT API â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  const colorArr = Array.isArray(pixels) ? pixels : null;
+  if (colorArr && colorArr.length >= W * H) {
+    for (let i = 0; i < W * H; i++) {
+      const hex = (colorArr[i] || '#ffffff').replace(/^#?/, '#').slice(0, 7);
+      const r = parseInt(hex.slice(1, 3), 16) || 0;
+      const g = parseInt(hex.slice(3, 5), 16) || 0;
+      const b = parseInt(hex.slice(5, 7), 16) || 0;
+      if (r + g + b > 660) continue; // skip very bright / white background pixels
+      ctx.fillStyle = hex;
+      ctx.fillRect((i % W) * S, Math.floor(i / W) * S, S, S);
+    }
+    return cv;
+  }
+
+  // â”€â”€ Mode 2: binary string â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const px = typeof pixels === 'string' ? pixels : '';
   const skinFill = fillColor || '#d8cfc4';
   if (px.length >= 1600) {
-    // BFS flood-fill from border edge-cells to find exterior (background) region
+    // BFS flood-fill from border to find exterior (background) region
     const outside = new Uint8Array(W * H);
     const queue = [];
     let qh = 0;
@@ -273,13 +296,11 @@ function buildNormiePortraitCanvas(pixels, size, fillColor) {
         queue.push(ni);
       }
     }
-    // Interior '0' pixels = body fill
     ctx.fillStyle = skinFill;
     for (let y = 0; y < H; y++)
       for (let x = 0; x < W; x++)
         if (px[y * W + x] !== '1' && !outside[y * W + x])
           ctx.fillRect(x * S, y * S, S, S);
-    // '1' pixels = dark outline / details
     ctx.fillStyle = '#111111';
     for (let y = 0; y < H; y++)
       for (let x = 0; x < W; x++)
@@ -292,12 +313,13 @@ function buildLeadNormieTexture() {
   return new Promise((resolve) => {
     if (!gameRef) { resolve(false); return; }
     const lead = leadNormie();
-    const px = lead?.pixels || '';
-    if (!px || px.length < 1600) { resolve(false); return; }
+    const px = lead?.pixels;
+    const pxLen = Array.isArray(px) ? px.length : (px || '').length;
+    if (!px || pxLen < 1600) { resolve(false); return; }
     // Type-based skin fill so different Normies look distinct
     const TYPE_FILL = { Human: '#d8c8b0', Cat: '#d4a06a', Alien: '#88c888', Agent: '#8899cc' };
     const fillColor = TYPE_FILL[lead?.type] || '#d8c8b0';
-    const cv = buildNormiePortraitCanvas(px, 120, fillColor); // 40 × 3 = 120×120
+    const cv = buildNormiePortraitCanvas(px, 120, fillColor); // 40 Ã— 3 = 120Ã—120
     const img = new Image();
     img.onload = () => {
       if (!gameRef) { resolve(false); return; }
@@ -400,7 +422,7 @@ function walletErrorMessage(err) {
   return `Wallet connect failed: ${code}`;
 }
 
-// ── Wallet modal ──────────────────────────────────────────────
+// â”€â”€ Wallet modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function openWalletModal() {
   detectedWallets = detectWallets();
   const modal = document.getElementById('wallet-modal');
@@ -410,12 +432,12 @@ function openWalletModal() {
   err.textContent = '';
 
   const ALL_WALLETS = [
-    { id: 'metamask',  name: 'MetaMask',        icon: '🦊', detect: () => !!window.ethereum?.isMetaMask },
-    { id: 'coinbase',  name: 'Coinbase Wallet',  icon: '🔵', detect: () => !!window.ethereum?.isCoinbaseWallet },
-    { id: 'rabby',     name: 'Rabby',            icon: '🐰', detect: () => !!window.ethereum?.isRabby },
-    { id: 'brave',     name: 'Brave Wallet',     icon: '🦁', detect: () => !!window.ethereum?.isBraveWallet },
-    { id: 'injected',  name: 'Browser Wallet',   icon: '🌐', detect: () => !!window.ethereum },
-    { id: 'walletconnect', name: 'WalletConnect', icon: '🔗', detect: () => false },
+    { id: 'metamask',  name: 'MetaMask',        icon: 'ðŸ¦Š', detect: () => !!window.ethereum?.isMetaMask },
+    { id: 'coinbase',  name: 'Coinbase Wallet',  icon: 'ðŸ”µ', detect: () => !!window.ethereum?.isCoinbaseWallet },
+    { id: 'rabby',     name: 'Rabby',            icon: 'ðŸ°', detect: () => !!window.ethereum?.isRabby },
+    { id: 'brave',     name: 'Brave Wallet',     icon: 'ðŸ¦', detect: () => !!window.ethereum?.isBraveWallet },
+    { id: 'injected',  name: 'Browser Wallet',   icon: 'ðŸŒ', detect: () => !!window.ethereum },
+    { id: 'walletconnect', name: 'WalletConnect', icon: 'ðŸ”—', detect: () => false },
   ];
 
   grid.innerHTML = '';
@@ -445,7 +467,7 @@ function closeWalletModal() {
 }
 
 function renderWalletChoices() {
-  // Legacy — kept for compatibility but wallet flow now uses openWalletModal()
+  // Legacy â€” kept for compatibility but wallet flow now uses openWalletModal()
   detectedWallets = detectWallets();
   if (ui.launchWallet) ui.launchWallet.disabled = false;
 }
@@ -708,8 +730,8 @@ function renderPartyMenu() {
   STATE.party.roster.forEach((n) => {
     const isLead = lead?.id === n.id;
     const portrait = buildNormiePortraitCanvas(n.pixels || '', 40).toDataURL();
-    const skills = [n.sk1, n.sk2, n.sk3].filter(Boolean).join(' / ') || '—';
-    const extras = [n.expression, n.accessory !== 'No Accessories' ? n.accessory : null].filter(Boolean).join(' · ');
+    const skills = [n.sk1, n.sk2, n.sk3].filter(Boolean).join(' / ') || 'â€”';
+    const extras = [n.expression, n.accessory !== 'No Accessories' ? n.accessory : null].filter(Boolean).join(' Â· ');
     rows.push(`
       <div class="party-card${isLead ? ' party-card--lead' : ''}">
         <img src="${portrait}" width="40" height="40" class="nc-portrait" alt="${n.name}">
@@ -724,7 +746,7 @@ function renderPartyMenu() {
   });
 
   for (let i = STATE.party.roster.length; i < 5; i++) {
-    rows.push(`<div class="party-slot-empty">Slot ${i + 1} — empty &middot; recruit companions in-world</div>`);
+    rows.push(`<div class="party-slot-empty">Slot ${i + 1} â€” empty &middot; recruit companions in-world</div>`);
   }
 
   ui.partyBody.innerHTML = rows.join('');
@@ -771,7 +793,7 @@ function renderInventoryMenu() {
   const p  = STATE.player;
   const eq = p.equipment;
 
-  // ── Equipped slots ──────────────────────────────────────────
+  // â”€â”€ Equipped slots â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const SLOT_ICONS = { weapon: '&#9876;', armor: '&#9673;', relic: '&#10022;' };
   const slotHtml = ['weapon','armor','relic'].map((slot) => {
     const item = itemById(eq[slot]);
@@ -780,12 +802,12 @@ function renderInventoryMenu() {
       <div class="equip-slot${isEmpty ? ' equip-slot-empty' : ''}">
         <span class="equip-slot-type">${SLOT_ICONS[slot]} ${slot}</span>
         <span class="equip-slot-name">${item ? item.name : 'Empty'}</span>
-        <span class="equip-slot-stats">${item ? `ATK+${item.atk||0} HP+${item.hp||0}` : '–'}</span>
+        <span class="equip-slot-stats">${item ? `ATK+${item.atk||0} HP+${item.hp||0}` : 'â€“'}</span>
       </div>`;
   }).join('');
   if (ui.equipSlots) ui.equipSlots.innerHTML = slotHtml;
 
-  // ── Backpack ───────────────────────────────────────────────
+  // â”€â”€ Backpack â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const body = [];
 
   if (!p.inventoryGear.length) {
@@ -976,13 +998,13 @@ function progressionDialogue(npcId) {
     }
     if (q.chapter < 3) return 'Keep fighting, Normie. The void loses ground one pixel at a time.';
     if (q.chapter === 3) return 'The Cave of First Bits holds the Render Key. The Guardian blocks your path.';
-    if (q.chapter === 4) return 'Beyond the cave — the Corrupted Lands and the Void Commander.';
+    if (q.chapter === 4) return 'Beyond the cave â€” the Corrupted Lands and the Void Commander.';
     return 'You stand at the edge of legend. The Citadel awaits. End NULLBYTE.';
   }
   if (npcId === 'scout') {
     if (q.chapter < 2) return 'Void scouts patrol the eastern fields. Stay mobile and hit fast.';
     if (q.chapter === 2) return 'Elite void units are in the Dark Margins. Hit hard or they regenerate.';
-    return 'Beyond the cave is void country proper. The Commander is brutal — Elara\'s healing mandatory.';
+    return 'Beyond the cave is void country proper. The Commander is brutal â€” Elara\'s healing mandatory.';
   }
   if (npcId === 'smith' || npcId === 'blacksmith') {
     return 'New weapon stocks arrived from the last clear-team raid. Gear up before the cave.';
@@ -1005,22 +1027,22 @@ function grantVictory(data) {
     recruited.forEach((id) => gainAffinity(q.affinity, id, 2));
   }
 
-  // ── Chapter progression — Pixel War arc ────────────────────────
-  // Ch.I → Ch.II: defeat 2 wild enemies
+  // â”€â”€ Chapter progression â€” Pixel War arc â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // Ch.I â†’ Ch.II: defeat 2 wild enemies
   if (q.chapter === 1 && q.kills >= 2) {
     q.chapter = 2;
     q.step = 2;
     p.gold += 35;
     p.potions += 1;
-    showDialogue('The Pixel War — Ch.II', 'The Render Fields hold for now. Seek allies in the static. Grom is somewhere in the Dark Margins.');
+    showDialogue('The Pixel War â€” Ch.II', 'The Render Fields hold for now. Seek allies in the static. Grom is somewhere in the Dark Margins.');
   }
 
-  // Ch.II → Ch.III: defeat 1 elite unit
+  // Ch.II â†’ Ch.III: defeat 1 elite unit
   if (q.chapter === 2 && q.eliteKills >= 1) {
     q.chapter = 3;
     q.step = 3;
     p.gold += 60;
-    showDialogue('The Pixel War — Ch.III', 'Elite void unit destroyed. The Cave of First Bits lies ahead. Find the Render Key.');
+    showDialogue('The Pixel War â€” Ch.III', 'Elite void unit destroyed. The Cave of First Bits lies ahead. Find the Render Key.');
   }
 
   // Cave cleared (boss tier 3 in cave map context)
@@ -1032,7 +1054,7 @@ function grantVictory(data) {
     q.flags.renderKeyObtained = true;
     p.gold += 90;
     p.potions += 2;
-    showDialogue('The Pixel War — Ch.IV', 'Cave Guardian defeated. The Render Key is yours. The Corrupted Lands stretch beyond.');
+    showDialogue('The Pixel War â€” Ch.IV', 'Cave Guardian defeated. The Render Key is yours. The Corrupted Lands stretch beyond.');
   }
 
   // Void Commander down
@@ -1042,10 +1064,10 @@ function grantVictory(data) {
     q.step = 5;
     q.flags.voidCommanderDefeated = true;
     p.gold += 110;
-    showDialogue('The Pixel War — Ch.V', 'Void Commander defeated. The Citadel gates are open. NULLBYTE awaits at the core.');
+    showDialogue('The Pixel War â€” Ch.V', 'Void Commander defeated. The Citadel gates are open. NULLBYTE awaits at the core.');
   }
 
-  // Final boss — NULLBYTE
+  // Final boss â€” NULLBYTE
   if (data.isBoss && q.chapter === 5 && !q.bossDefeated) {
     q.bossDefeated = true;
     q.flags.nullbyteConfronted = true;
@@ -1090,10 +1112,10 @@ function tintFromLead() {
   return partyTintByType(lead?.type);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// TILE CONSTANTS — indices into the buildRpgTileset() 8×8 (16 px) atlas.
-// TID.WALL (3) is the ONLY collision tile — setCollisionBetween(3,3).
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// TILE CONSTANTS â€” indices into the buildRpgTileset() 8Ã—8 (16 px) atlas.
+// TID.WALL (3) is the ONLY collision tile â€” setCollisionBetween(3,3).
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const TID = { VOID: 0, GRASS: 1, PATH: 2, WALL: 3, FLOOR: 4, DARK: 5, RUINS: 6, WATER: 7 };
 
 function fillBlock(map, x1, y1, x2, y2, wallId, inId) {
@@ -1139,7 +1161,32 @@ function buildRuinsMap() {
   return map;
 }
 
+// 20Ã—14 bedroom / home interior.  Player wakes here; exit south â†’ town.
+function buildHomeMap() {
+  const W = 20, H = 14;
+  const map = Array.from({ length: H }, () => Array(W).fill(TID.FLOOR));
+  // Outer walls
+  for (let x = 0; x < W; x++) { map[0][x] = TID.WALL; map[H-1][x] = TID.WALL; }
+  for (let y = 0; y < H; y++) { map[y][0] = TID.WALL; map[y][W-1] = TID.WALL; }
+  // South exit gap (3 tiles wide, centred)
+  for (let x = 8; x <= 11; x++) map[H-1][x] = TID.PATH;
+  // Bed (top-left nook)
+  fillBlock(map, 2, 1, 5, 4, TID.DARK, TID.DARK);
+  // Kitchen counter (top-right)
+  for (let x = 13; x <= 17; x++) map[2][x] = TID.DARK;
+  return map;
+}
+
 const MAP_DEFS = {
+  home: {
+    w: 20, h: 14,
+    ground: buildHomeMap(),
+    spawn: { spawn: { col: 10, row: 8 } },
+    warps:      [{ col: 8, row: 13, cols: 4, rows: 1, targetMap: 'town', targetSpawn: 'from_overworld' }],
+    npcs:       [{ id: 'mom_up', col: 15, row: 5 }],
+    encounters: [],
+    bosses:     [],
+  },
   town: {
     w: 36, h: 30,
     ground: buildTownMap(),
@@ -1169,21 +1216,21 @@ const MAP_DEFS = {
   },
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Procedural texture builders — pure DOM canvas, no Phaser API.
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Procedural texture builders â€” pure DOM canvas, no Phaser API.
 // All returned as data-URLs fed into load.image / load.spritesheet.
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function buildRpgTileset() {
   const SZ = 16;
   const cv = document.createElement('canvas');
-  cv.width = 128; cv.height = 128; // 8×8 grid of 16×16 tiles
+  cv.width = 128; cv.height = 128; // 8Ã—8 grid of 16Ã—16 tiles
   const c = cv.getContext('2d');
   const t = (tx, ty, fn) => { c.save(); c.translate(tx * SZ, ty * SZ); fn(); c.restore(); };
 
-  // 0 – VOID
+  // 0 â€“ VOID
   t(0, 0, () => { c.fillStyle = '#0d0d0d'; c.fillRect(0, 0, SZ, SZ); });
 
-  // 1 – GRASS (light with scattered dark marks)
+  // 1 â€“ GRASS (light with scattered dark marks)
   t(1, 0, () => {
     c.fillStyle = '#dedede'; c.fillRect(0, 0, SZ, SZ);
     c.fillStyle = '#2a2a2a';
@@ -1193,7 +1240,7 @@ function buildRpgTileset() {
     [[3,4],[9,8],[14,3],[5,11]].forEach(([x,y]) => c.fillRect(x,y,1,1));
   });
 
-  // 2 – COBBLESTONE PATH (staggered brick pattern)
+  // 2 â€“ COBBLESTONE PATH (staggered brick pattern)
   t(2, 0, () => {
     c.fillStyle = '#b5b5b5'; c.fillRect(0, 0, SZ, SZ);
     c.fillStyle = '#606060';
@@ -1204,7 +1251,7 @@ function buildRpgTileset() {
     c.fillRect(1, 8, 1, 6); c.fillRect(4, 8, 6, 6); c.fillRect(12, 8, 3, 6);
   });
 
-  // 3 – WALL (collision | dark brick, lit-from-above highlight)
+  // 3 â€“ WALL (collision | dark brick, lit-from-above highlight)
   t(3, 0, () => {
     c.fillStyle = '#1a1a1a'; c.fillRect(0, 0, SZ, SZ);
     c.fillStyle = '#707070'; c.fillRect(0, 0, SZ, 1);
@@ -1214,7 +1261,7 @@ function buildRpgTileset() {
     c.fillRect(7, 0, 1, 5); c.fillRect(3, 6, 1, 4); c.fillRect(11, 6, 1, 4); c.fillRect(7, 11, 1, 5);
   });
 
-  // 4 – TOWN FLOOR (light stone slab with raised checkerboard faces)
+  // 4 â€“ TOWN FLOOR (light stone slab with raised checkerboard faces)
   t(4, 0, () => {
     c.fillStyle = '#cdcdcd'; c.fillRect(0, 0, SZ, SZ);
     c.fillStyle = '#999'; c.fillRect(0, 0, SZ, 1); c.fillRect(0, 0, 1, SZ);
@@ -1223,7 +1270,7 @@ function buildRpgTileset() {
     c.fillStyle = '#dcdcdc'; c.fillRect(9, 1, 6, 6); c.fillRect(1, 9, 6, 6);
   });
 
-  // 5 – DARK FLOOR (building interiors)
+  // 5 â€“ DARK FLOOR (building interiors)
   t(5, 0, () => {
     c.fillStyle = '#484848'; c.fillRect(0, 0, SZ, SZ);
     c.fillStyle = '#2e2e2e'; c.fillRect(0, 0, SZ, 1); c.fillRect(0, 0, 1, SZ);
@@ -1232,7 +1279,7 @@ function buildRpgTileset() {
     c.fillStyle = '#4e4e4e'; c.fillRect(9, 1, 6, 6); c.fillRect(1, 9, 6, 6);
   });
 
-  // 6 – RUINS FLOOR (very dark cracked stone)
+  // 6 â€“ RUINS FLOOR (very dark cracked stone)
   t(6, 0, () => {
     c.fillStyle = '#202020'; c.fillRect(0, 0, SZ, SZ);
     c.fillStyle = '#484848';
@@ -1241,7 +1288,7 @@ function buildRpgTileset() {
     c.fillStyle = '#181818'; c.fillRect(0, 0, SZ, 1); c.fillRect(0, 0, 1, SZ);
   });
 
-  // 7 – WATER (deep dark with wave highlights)
+  // 7 â€“ WATER (deep dark with wave highlights)
   t(7, 0, () => {
     c.fillStyle = '#0a1212'; c.fillRect(0, 0, SZ, SZ);
     c.fillStyle = '#203030';
@@ -1306,7 +1353,7 @@ function buildNpcCanvas() {
     const x = i * 32; const bob = i === 1 ? -1 : 0;
     // shadow
     ctx.fillStyle = 'rgba(0,0,0,0.15)'; ctx.fillRect(x+8, 30, 16, 2);
-    // robe (wide — distinct from player silhouette)
+    // robe (wide â€” distinct from player silhouette)
     ctx.fillStyle = '#181818'; ctx.fillRect(x+7, 13+bob, 18, 15);
     ctx.fillStyle = '#252525'; ctx.fillRect(x+9, 15+bob, 14, 11);
     ctx.fillStyle = '#101010'; ctx.fillRect(x+15, 13+bob, 2, 15);
@@ -1361,12 +1408,12 @@ function buildEnemyCanvas() {
   return cv;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 class BootScene extends Phaser.Scene {
   constructor() { super('BootScene'); }
 
   preload() {
-    // Tileset built procedurally — crisp monochrome 16×16 pixel tiles, no external file.
+    // Tileset built procedurally â€” crisp monochrome 16Ã—16 pixel tiles, no external file.
     this.load.image(ART_KEYS.tiles, buildRpgTileset().toDataURL());
     this.load.spritesheet(ART_KEYS.player, buildPlayerCanvas().toDataURL(), { frameWidth: 32, frameHeight: 32 });
     this.load.spritesheet(ART_KEYS.npc,    buildNpcCanvas().toDataURL(),    { frameWidth: 32, frameHeight: 32 });
@@ -1390,7 +1437,7 @@ class UIScene extends Phaser.Scene {
   constructor() { super('UIScene'); }
 
   create() {
-    updateHud('Verdant Town');
+    updateHud('Your Bedroom');
     bus.on('zone-changed', (zone) => updateHud(zone));
     bus.on('hud-refresh', () => updateHud());
 
@@ -1425,7 +1472,7 @@ class OverworldScene extends Phaser.Scene {
 
   create() {
     overworldRef = this;
-    // overlayLocked stays false — the launch overlay covers the canvas visually.
+    // overlayLocked stays false â€” the launch overlay covers the canvas visually.
     // setOverlayLock(false) is called explicitly after demo/wallet launch.
     this.physics.world.setFPS(60);
     this.keys = this.input.keyboard.addKeys('W,A,S,D,UP,DOWN,LEFT,RIGHT,SHIFT,E,I');
@@ -1440,7 +1487,7 @@ class OverworldScene extends Phaser.Scene {
     this.cameras.main.setZoom(window.innerWidth < 768 ? 1.5 : 2.5);
     this.cameras.main.roundPixels = true;
 
-    // Touch / pointer controls — left-half drag = move direction vector
+    // Touch / pointer controls â€” left-half drag = move direction vector
     this.touchMove = { x: 0, y: 0 };
     this._touchActive = false;
     this._touchOrig = { x: 0, y: 0 };
@@ -1466,11 +1513,15 @@ class OverworldScene extends Phaser.Scene {
     });
 
     bus.on('state-reloaded', () => {
-      this.refreshLeadAvatar();
-      this.loadMap(STATE.world.mapId, STATE.world.spawnName);
-      if (this.player.texture.key === ART_KEYS.player) this.player.anims.play('player-down', true);
-      else this.player.anims.stop();
-      // Unlock movement now that a Normie is loaded and the game has started
+      try {
+        this.refreshLeadAvatar();
+        this.loadMap(STATE.world.mapId, STATE.world.spawnName);
+        if (this.player.texture.key === ART_KEYS.player) this.player.anims.play('player-down', true);
+        else this.player.anims.stop();
+      } catch (err) {
+        console.warn('[OverworldScene] state-reloaded error:', err);
+      }
+      // Always unlock â€” even if above threw
       this.overlayLocked = false;
     });
 
@@ -1491,9 +1542,9 @@ class OverworldScene extends Phaser.Scene {
   refreshLeadAvatar() {
     const key = leadAvatarKey();
     if (key === LEAD_NORMIE_TEXTURE_KEY) {
-      // addImage textures have no numeric frame — must call setTexture without a frame index
+      // addImage textures have no numeric frame â€” must call setTexture without a frame index
       this.player.setTexture(key);
-      // Normie canvas is 120×120 (3px/px) — scale 0.32 = ~38px world, looks great at 2.5x zoom
+      // Normie canvas is 120Ã—120 (3px/px) â€” scale 0.32 = ~38px world, looks great at 2.5x zoom
       this.player.setScale(0.32);
       this.player.body.setSize(60, 68).setOffset(30, 38);
       this.player.clearTint();
@@ -1507,7 +1558,8 @@ class OverworldScene extends Phaser.Scene {
   }
 
   zoneFromMap() {
-    if (STATE.world.mapId === 'town') return 'Verdant Town';
+    if (STATE.world.mapId === 'home')  return 'Your Bedroom';
+    if (STATE.world.mapId === 'town')  return 'Verdant Town';
     if (STATE.world.mapId === 'ruins') return 'Null Ruins';
     return 'Neon Plains';
   }
@@ -1529,12 +1581,12 @@ class OverworldScene extends Phaser.Scene {
     const mdef = MAP_DEFS[mapId];
     if (!mdef) { console.error('[NormiesRPG] Unknown map:', mapId); return; }
 
-    // Build tilemap from inline data — Kenney mono tileset is 16×16 px per tile.
-    // Scale 2 renders each tile at 32×32 px in world space.
+    // Build tilemap from inline data â€” Kenney mono tileset is 16Ã—16 px per tile.
+    // Scale 2 renders each tile at 32Ã—32 px in world space.
     this.map = this.make.tilemap({ data: mdef.ground, tileWidth: 16, tileHeight: 16 });
     this.tileset = this.map.addTilesetImage(ART_KEYS.tiles, undefined, 16, 16);
     if (!this.tileset) {
-      console.error('[NormiesRPG] addTilesetImage returned null — texture key:', ART_KEYS.tiles);
+      console.error('[NormiesRPG] addTilesetImage returned null â€” texture key:', ART_KEYS.tiles);
       return;
     }
 
@@ -1543,7 +1595,7 @@ class OverworldScene extends Phaser.Scene {
     this.groundLayer.setCollisionBetween(3, 3);
     this.physics.add.collider(this.player, this.groundLayer);
 
-    // World size: tile 16px × scale 2 = 32 world-px per tile
+    // World size: tile 16px Ã— scale 2 = 32 world-px per tile
     const mapW = mdef.w * 32;
     const mapH = mdef.h * 32;
     this.physics.world.setBounds(0, 0, mapW, mapH);
@@ -1604,7 +1656,7 @@ class OverworldScene extends Phaser.Scene {
         else this.player.anims.play(vy < 0 ? 'player-up' : 'player-down', true);
       } else this.player.anims.stop();
     } else {
-      // Normie avatar is 120×120 canvas — correct base scale is 0.32 (set in refreshLeadAvatar)
+      // Normie avatar is 120Ã—120 canvas â€” correct base scale is 0.32 (set in refreshLeadAvatar)
       const base = this.player.texture.key === LEAD_NORMIE_TEXTURE_KEY ? 0.32 : 0.9;
       const pulse = (vx !== 0 || vy !== 0) ? (base * (0.97 + Math.sin(this.time.now / 60) * 0.03)) : base;
       this.player.setScale(pulse);
@@ -1960,7 +2012,7 @@ async function hydrateWalletParty(providerId = null) {
       return;
     }
 
-    // Show normie picker — player chooses exactly 1.
+    // Show normie picker â€” player chooses exactly 1.
     showNormiePicker(owned, async (chosen) => {
       STATE.party.roster = [chosen];
       STATE.party.leadId = chosen.id;
@@ -2014,12 +2066,23 @@ function showNormiePicker(normies, onPick) {
 
 async function launchDemoMode() {
   setLaunchStatus('Loading demo party...');
-  await hydrateDemoParty();
+  try {
+    await hydrateDemoParty();
+  } catch (err) {
+    console.warn('[launchDemoMode] hydration failed, using fallback:', err);
+    const fb = makeDemoNormie(6793);
+    STATE.party.roster = [fb];
+    STATE.party.leadId = fb.id;
+    STATE.identity.mode = 'demo';
+    applyLeadNormieStats();
+    updateHud();
+  }
   exitLaunchOverlay();
-  // Explicit unlock — belt-and-suspenders in case the bus handler had a timing edge-case
+  // Unlock immediately + retry in case OverworldScene.create() hasn't fired yet
   setOverlayLock(false);
-  // Rebuild texture now that the overlay is gone, to ensure the avatar shows
-  await buildLeadNormieTexture();
+  setTimeout(() => setOverlayLock(false), 100);
+  setTimeout(() => setOverlayLock(false), 600);
+  try { await buildLeadNormieTexture(); } catch (err) { console.warn('[launchDemoMode] texture build failed:', err); }
 }
 
 ui.dialogueClose.addEventListener('click', () => {
@@ -2080,7 +2143,7 @@ initUiTheme();
 renderWalletChoices();
 updateHud('Verdant Town');
 
-// D-pad mobile controls — container-based for reliable sliding, diagonals & multi-touch
+// D-pad mobile controls â€” container-based for reliable sliding, diagonals & multi-touch
 (function wireDpad() {
   const dpad = { up: false, down: false, left: false, right: false };
   window._dpadState = dpad;

@@ -29,7 +29,17 @@ export async function fetchNormiePixels(id) {
   if (CACHE[`px_${id}`]) return CACHE[`px_${id}`];
   const r = await fetchWithTimeout(`${API}/normie/${id}/pixels`);
   const raw = await r.json();
-  // Accept any common response shape
+
+  // Resolve colour array: API may return array directly, or object with .pixels/.data array
+  const arr = Array.isArray(raw)          ? raw :
+              Array.isArray(raw?.pixels)  ? raw.pixels :
+              Array.isArray(raw?.data)    ? raw.data  : null;
+  if (arr && arr.length >= 1600) {
+    CACHE[`px_${id}`] = arr;
+    return arr;
+  }
+
+  // Fall back to string formats
   const pxStr = raw?.pixels || raw?.data || raw?.pixel_string || raw?.pixelString ||
                 (typeof raw === 'string' && raw.length >= 1600 ? raw : null) || '';
   CACHE[`px_${id}`] = pxStr;
@@ -45,7 +55,20 @@ export function calcStats(meta, pixelStr, lv=1) {
   const accessory  = get('Accessory') || 'No Accessories';
   const background = get('Background') || '';
 
-  const pixelCount = pixelStr ? (pixelStr.match(/1/g)||[]).length : 800;
+  // Count "active" (drawn) pixels for stat scaling
+  let pixelCount;
+  if (Array.isArray(pixelStr)) {
+    // Colour array: count non-white pixels
+    pixelCount = pixelStr.filter((hex) => {
+      const h = (hex || '#fff').replace(/^#?/, '');
+      const r = parseInt(h.slice(0, 2), 16) || 0;
+      const g = parseInt(h.slice(2, 4), 16) || 0;
+      const b = parseInt(h.slice(4, 6), 16) || 0;
+      return r + g + b < 660;
+    }).length;
+  } else {
+    pixelCount = pixelStr ? (pixelStr.match(/1/g) || []).length : 800;
+  }
 
   const TYPE_MOD = {
     Human: { hp:0,  mp:0,  def:0,  spd:0,  atk:0  },
@@ -120,7 +143,8 @@ export function calcStats(meta, pixelStr, lv=1) {
 export async function fetchNormieFull(id) {
   try {
     const [meta, pixData] = await Promise.all([fetchNormieMeta(id), fetchNormiePixels(id)]);
-    const pixelStr = pixData?.pixels || pixData?.data || pixData || '';
+    // pixData is already canonicalized by fetchNormiePixels (array or string)
+    const pixelStr = pixData || '';
     const stats = calcStats(meta, pixelStr);
     const name = meta.name || `Normie #${id}`;
     return {
