@@ -695,6 +695,56 @@ function tintFromLead() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// MAP DEFINITIONS — inline JS, no external JSON files.
+// Tile value key (0-indexed frame in buildTileCanvas 4×4 atlas):
+//   0  = overworld ground (grey-blue)     3  = dark wall (impassable)
+//   4  = town floor (blue-grey)            8  = ruins floor (very dark)
+// All maps share: border = tile 3 (dark wall), setCollisionBetween(3,3).
+// ─────────────────────────────────────────────────────────────────────────────
+function buildMapGround(w, h, floorId) {
+  const rng = (x, y) => (((x * 73856093) ^ (y * 19349663)) >>> 0);
+  return Array.from({ length: h }, (_, y) =>
+    Array.from({ length: w }, (_, x) => {
+      if (x === 0 || x === w - 1 || y === 0 || y === h - 1) return 3;
+      const v = rng(x, y) % 20;
+      if (v < 2) return floorId + 1;
+      if (v < 4) return floorId + 2;
+      return floorId;
+    })
+  );
+}
+
+const MAP_DEFS = {
+  town: {
+    w: 36, h: 30,
+    ground: buildMapGround(36, 30, 4),
+    spawn: { from_overworld: { col: 18, row: 14 } },
+    warps:     [{ col: 15, row: 28, cols: 6, rows: 2, targetMap: 'overworld', targetSpawn: 'from_town' }],
+    npcs:      [{ id: 'elder', col: 8, row: 8 }, { id: 'smith', col: 26, row: 8 }, { id: 'merchant', col: 22, row: 18 }, { id: 'scout', col: 12, row: 18 }],
+    encounters: [],
+    bosses:    [],
+  },
+  overworld: {
+    w: 72, h: 72,
+    ground: buildMapGround(72, 72, 0),
+    spawn: { spawn_main: { col: 36, row: 36 }, from_town: { col: 30, row: 40 }, from_ruins: { col: 50, row: 28 } },
+    warps:     [{ col: 28, row: 38, cols: 4, rows: 4, targetMap: 'town', targetSpawn: 'from_overworld' }, { col: 55, row: 25, cols: 4, rows: 4, targetMap: 'ruins', targetSpawn: 'from_overworld' }],
+    npcs:      [],
+    encounters: [{ col: 10, row: 10, cols: 20, rows: 20, chance: 0.13, tier: 1 }, { col: 42, row: 10, cols: 20, rows: 20, chance: 0.18, tier: 2 }, { col: 10, row: 42, cols: 20, rows: 20, chance: 0.18, tier: 2 }, { col: 42, row: 42, cols: 20, rows: 20, chance: 0.22, tier: 3 }],
+    bosses:    [],
+  },
+  ruins: {
+    w: 36, h: 36,
+    ground: buildMapGround(36, 36, 8),
+    spawn: { from_overworld: { col: 18, row: 18 } },
+    warps:     [{ col: 15, row: 34, cols: 6, rows: 2, targetMap: 'overworld', targetSpawn: 'from_ruins' }],
+    npcs:      [],
+    encounters: [{ col: 5, row: 5, cols: 26, rows: 26, chance: 0.22, tier: 3 }],
+    bosses:    [{ col: 16, row: 15, cols: 4, rows: 4, bossId: 'abyss_warden' }],
+  },
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Procedural texture builders — pure DOM canvas, no Phaser API.
 // Converted to data-URLs and fed into load.image / load.spritesheet so Phaser
 // handles the full WebGL upload pipeline (the only reliable cross-GPU path).
@@ -820,10 +870,7 @@ class BootScene extends Phaser.Scene {
   constructor() { super('BootScene'); }
 
   preload() {
-    this.load.tilemapTiledJSON('overworld', 'assets/maps/overworld.json');
-    this.load.tilemapTiledJSON('town',      'assets/maps/town.json');
-    this.load.tilemapTiledJSON('ruins',     'assets/maps/ruins.json');
-
+    // Maps are defined inline in MAP_DEFS — no JSON files to load.
     // Load procedural art as data-URLs — goes through Phaser's full image
     // pipeline, which guarantees correct WebGL texture upload on all GPUs.
     this.load.image(ART_KEYS.tiles, buildTileCanvas().toDataURL());
@@ -951,38 +998,47 @@ class OverworldScene extends Phaser.Scene {
   loadMap(mapId, spawnName) {
     this.clearMapObjects();
 
-    this.map = this.make.tilemap({ key: mapId });
-    this.tileset = this.map.addTilesetImage('generated-tileset', ART_KEYS.tiles, 32, 32, 0, 0, 1);
+    const mdef = MAP_DEFS[mapId];
+    if (!mdef) { console.error('[NormiesRPG] Unknown map:', mapId); return; }
+
+    // Build tilemap from inline data — no JSON file dependency.
+    this.map = this.make.tilemap({ data: mdef.ground, tileWidth: 32, tileHeight: 32 });
+    this.tileset = this.map.addTilesetImage(ART_KEYS.tiles, undefined, 32, 32);
     if (!this.tileset) {
-      console.error('[PixelWar] addTilesetImage returned null — texture key:', ART_KEYS.tiles);
+      console.error('[NormiesRPG] addTilesetImage returned null — texture key:', ART_KEYS.tiles);
       return;
     }
 
-    this.groundLayer = this.map.createLayer('ground', this.tileset, 0, 0).setScale(2);
-    this.collisionLayer = this.map.createLayer('collision', this.tileset, 0, 0).setScale(2).setVisible(false);
+    this.groundLayer = this.map.createLayer(0, this.tileset, 0, 0).setScale(2);
+    this.collisionLayer = null; // single-layer approach; walls use tile index 3
+    this.groundLayer.setCollisionBetween(3, 3);
+    this.physics.add.collider(this.player, this.groundLayer);
 
-    this.collisionLayer.setCollisionByExclusion([0]);
-    this.physics.add.collider(this.player, this.collisionLayer);
+    const mapW = mdef.w * 32 * 2;
+    const mapH = mdef.h * 32 * 2;
+    this.physics.world.setBounds(0, 0, mapW, mapH);
+    this.cameras.main.setBounds(0, 0, mapW, mapH);
 
-    this.physics.world.setBounds(0, 0, this.map.widthInPixels * 2, this.map.heightInPixels * 2);
-    this.cameras.main.setBounds(0, 0, this.map.widthInPixels * 2, this.map.heightInPixels * 2);
+    const spawnData = mdef.spawn[spawnName] || Object.values(mdef.spawn)[0];
+    if (spawnData) this.player.setPosition((spawnData.col * 32 + 16) * 2, (spawnData.row * 32 + 16) * 2);
 
-    const objects = this.map.getObjectLayer('objects')?.objects || [];
-    let spawn = objects.find((o) => o.type === 'spawn' && o.name === spawnName);
-    if (!spawn) spawn = objects.find((o) => o.type === 'spawn');
-    if (spawn) this.player.setPosition((spawn.x + 16) * 2, (spawn.y + 16) * 2);
+    mdef.npcs.forEach(({ id, col, row }) => {
+      const npcData = NPCS[id] || NPCS.elder;
+      const spr = this.add.sprite((col * 32 + 16) * 2, (row * 32 + 16) * 2, ART_KEYS.npc, 0).setScale(2).setDepth(9);
+      spr.anims.play('npc-idle', true);
+      this.npcs.push({ id, data: npcData, sprite: spr });
+    });
 
-    objects.forEach((obj) => {
-      if (obj.type === 'npc') {
-        const npcId = getObjectProp(obj, 'npcId', 'elder');
-        const npcData = NPCS[npcId] || NPCS.elder;
-        const spr = this.add.sprite((obj.x + 16) * 2, (obj.y + 16) * 2, ART_KEYS.npc, 0).setScale(2).setDepth(9);
-        spr.anims.play('npc-idle', true);
-        this.npcs.push({ id: npcId, data: npcData, sprite: spr });
-      }
-      if (obj.type === 'warp') this.warps.push({ rect: scaleObjRect(obj, 2), targetMap: getObjectProp(obj, 'targetMap', 'overworld'), targetSpawn: getObjectProp(obj, 'targetSpawn', 'spawn_main') });
-      if (obj.type === 'encounter') this.encounters.push({ rect: scaleObjRect(obj, 2), chance: Number(getObjectProp(obj, 'chance', 0.1)), tier: Number(getObjectProp(obj, 'tier', 1)) });
-      if (obj.type === 'boss') this.bosses.push({ rect: scaleObjRect(obj, 2), bossId: getObjectProp(obj, 'bossId', 'abyss_warden') });
+    mdef.warps.forEach(({ col, row, cols, rows, targetMap, targetSpawn }) => {
+      this.warps.push({ rect: new Phaser.Geom.Rectangle(col * 64, row * 64, cols * 64, rows * 64), targetMap, targetSpawn });
+    });
+
+    mdef.encounters.forEach(({ col, row, cols, rows, chance, tier }) => {
+      this.encounters.push({ rect: new Phaser.Geom.Rectangle(col * 64, row * 64, cols * 64, rows * 64), chance, tier });
+    });
+
+    mdef.bosses.forEach(({ col, row, cols, rows, bossId }) => {
+      this.bosses.push({ rect: new Phaser.Geom.Rectangle(col * 64, row * 64, cols * 64, rows * 64), bossId });
     });
 
     STATE.world.mapId = mapId;
