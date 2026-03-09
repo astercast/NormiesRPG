@@ -1421,7 +1421,8 @@ class OverworldScene extends Phaser.Scene {
 
   create() {
     overworldRef = this;
-    this.overlayLocked = true; // locked until a Normie is chosen and game is ready
+    // overlayLocked stays false — the launch overlay covers the canvas visually.
+    // setOverlayLock(false) is called explicitly after demo/wallet launch.
     this.physics.world.setFPS(60);
     this.keys = this.input.keyboard.addKeys('W,A,S,D,UP,DOWN,LEFT,RIGHT,SHIFT,E,I');
 
@@ -1485,14 +1486,16 @@ class OverworldScene extends Phaser.Scene {
 
   refreshLeadAvatar() {
     const key = leadAvatarKey();
-    this.player.setTexture(key, 0);
     if (key === LEAD_NORMIE_TEXTURE_KEY) {
+      // addImage textures have no numeric frame — must call setTexture without a frame index
+      this.player.setTexture(key);
       // Normie canvas is 120×120 (3px/px) — scale 0.32 = ~38px world, looks great at 2.5x zoom
       this.player.setScale(0.32);
       this.player.body.setSize(60, 68).setOffset(30, 38);
       this.player.clearTint();
       this.player.rotation = 0;
     } else {
+      this.player.setTexture(key, 0);
       this.player.setScale(1.5);
       this.player.body.setSize(16, 12).setOffset(8, 18);
       this.player.setTint(tintFromLead());
@@ -1958,6 +1961,7 @@ async function hydrateWalletParty(providerId = null) {
       updateHud();
       bus.emit('state-reloaded');
       exitLaunchOverlay();
+      setOverlayLock(false);
       loadCloud();
     });
   } catch (err) {
@@ -1999,6 +2003,10 @@ async function launchDemoMode() {
   setLaunchStatus('Loading demo party...');
   await hydrateDemoParty();
   exitLaunchOverlay();
+  // Explicit unlock — belt-and-suspenders in case the bus handler had a timing edge-case
+  setOverlayLock(false);
+  // Rebuild texture now that the overlay is gone, to ensure the avatar shows
+  await buildLeadNormieTexture();
 }
 
 ui.dialogueClose.addEventListener('click', () => {
