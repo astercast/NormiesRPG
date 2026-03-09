@@ -4,12 +4,19 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Normies RPG</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="./phaser-style.css" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js"></script>
 </head>
 <body class="prelaunch">
   <div id="launch-overlay" class="launch-overlay">
     <div class="launch-card">
+      <div class="launch-topline">
+        <a class="launch-site" href="https://normies.art" target="_blank" rel="noopener noreferrer">normies.art</a>
+        <button id="btn-theme-toggle-launch" class="btn alt">Light UI</button>
+      </div>
       <p class="launch-kicker">Normies On-Chain Adventure</p>
       <h1 class="launch-title">Normies RPG</h1>
       <p class="launch-subtitle">Pick your wallet, load your owned Normies, and jump straight into the monochrome warzone.</p>
@@ -31,6 +38,7 @@
   <div class="wallet-bar">
     <button id="btn-wallet-connect" class="btn">Connect Wallet</button>
     <button id="btn-wallet-demo" class="btn alt">Demo Party</button>
+    <button id="btn-theme-toggle" class="btn alt">Light UI</button>
     <span id="wallet-status" class="wallet-status">Wallet: not connected</span>
   </div>
 

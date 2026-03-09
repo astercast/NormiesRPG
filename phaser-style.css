@@ -7,6 +7,28 @@
   --accent: #f8f8f8;
 }
 
+body[data-ui-theme="dark"] {
+  --shell-bg: linear-gradient(155deg, rgba(5, 5, 5, 0.9) 0%, rgba(14, 14, 14, 0.96) 56%, rgba(3, 3, 3, 0.96) 100%);
+  --shell-overlay: radial-gradient(circle at 20% 16%, rgba(255, 255, 255, 0.12), transparent 46%), radial-gradient(circle at 82% 14%, rgba(255, 255, 255, 0.06), transparent 40%);
+  --shell-card: rgba(10, 10, 10, 0.9);
+  --shell-line: rgba(235, 235, 235, 0.34);
+  --shell-text: #f5f5f5;
+  --shell-muted: #c5c5c5;
+  --shell-btn: #1d1d1d;
+  --shell-btn-alt: #131313;
+}
+
+body[data-ui-theme="light"] {
+  --shell-bg: linear-gradient(155deg, rgba(246, 246, 246, 0.92) 0%, rgba(233, 233, 233, 0.96) 56%, rgba(252, 252, 252, 0.96) 100%);
+  --shell-overlay: radial-gradient(circle at 20% 16%, rgba(0, 0, 0, 0.09), transparent 48%), radial-gradient(circle at 82% 14%, rgba(0, 0, 0, 0.06), transparent 44%);
+  --shell-card: rgba(255, 255, 255, 0.88);
+  --shell-line: rgba(28, 28, 28, 0.3);
+  --shell-text: #181818;
+  --shell-muted: #444444;
+  --shell-btn: #ffffff;
+  --shell-btn-alt: #ececec;
+}
+
 @keyframes riseIn {
   from { opacity: 0; transform: translateY(18px) scale(0.98); }
   to { opacity: 1; transform: translateY(0) scale(1); }
@@ -20,9 +42,9 @@ html,
 body {
   margin: 0;
   height: 100%;
-  background: radial-gradient(circle at 25% 15%, #303030 0%, #121212 45%, #080808 100%);
+  background: var(--shell-bg);
   color: var(--text);
-  font-family: "Rajdhani", "Segoe UI", sans-serif;
+  font-family: "Space Grotesk", "Segoe UI", sans-serif;
   overflow: hidden;
 }
 
@@ -51,21 +73,39 @@ body {
   z-index: 60;
   display: grid;
   place-items: center;
-  background:
-    radial-gradient(circle at 20% 16%, rgba(255, 255, 255, 0.14), transparent 46%),
-    radial-gradient(circle at 82% 14%, rgba(255, 255, 255, 0.08), transparent 40%),
-    linear-gradient(155deg, rgba(5, 5, 5, 0.88) 0%, rgba(11, 11, 11, 0.95) 52%, rgba(3, 3, 3, 0.95) 100%);
+  background: var(--shell-overlay), var(--shell-bg);
   padding: 20px;
 }
 
 .launch-card {
   width: min(900px, 95vw);
-  border: 1px solid rgba(235, 235, 235, 0.33);
-  background: rgba(10, 10, 10, 0.86);
+  border: 1px solid var(--shell-line);
+  background: var(--shell-card);
   backdrop-filter: blur(10px);
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.58);
   padding: 24px;
   animation: riseIn 300ms ease-out;
+}
+
+.launch-topline {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.launch-site {
+  color: var(--shell-text);
+  text-decoration: none;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border: 1px solid var(--shell-line);
+  padding: 6px 8px;
+}
+
+.launch-site:hover {
+  opacity: 0.82;
 }
 
 .launch-kicker {
@@ -73,7 +113,7 @@ body {
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.14em;
-  color: #d4d4d4;
+  color: var(--shell-muted);
 }
 
 .launch-title {
@@ -82,14 +122,15 @@ body {
   line-height: 0.94;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: #fbfbfb;
+  color: var(--shell-text);
+  font-family: "Bebas Neue", sans-serif;
 }
 
 .launch-subtitle {
   margin: 0 0 18px;
   max-width: 70ch;
   font-size: 14px;
-  color: #cfcfcf;
+  color: var(--shell-muted);
 }
 
 .wallet-picker-head {
@@ -98,7 +139,7 @@ body {
   align-items: center;
   margin: 8px 0;
   font-size: 13px;
-  color: #d7d7d7;
+  color: var(--shell-muted);
 }
 
 .wallet-picker {
@@ -108,9 +149,9 @@ body {
 }
 
 .wallet-choice {
-  border: 1px solid #4c4c4c;
-  background: #171717;
-  color: #ebebeb;
+  border: 1px solid var(--shell-line);
+  background: rgba(127, 127, 127, 0.08);
+  color: var(--shell-text);
   text-align: left;
   padding: 12px;
   cursor: pointer;
@@ -118,12 +159,12 @@ body {
 }
 
 .wallet-choice:hover {
-  border-color: #b0b0b0;
+  border-color: var(--shell-text);
 }
 
 .wallet-choice.active {
-  border-color: #f3f3f3;
-  background: #2a2a2a;
+  border-color: var(--shell-text);
+  background: rgba(127, 127, 127, 0.2);
 }
 
 .wallet-choice-name {
@@ -133,14 +174,14 @@ body {
 
 .wallet-choice-tag {
   font-size: 11px;
-  color: #bbbbbb;
+  color: var(--shell-muted);
 }
 
 .wallet-empty {
   grid-column: 1 / -1;
-  border: 1px dashed #5a5a5a;
+  border: 1px dashed var(--shell-line);
   padding: 14px;
-  color: #bdbdbd;
+  color: var(--shell-muted);
   font-size: 12px;
 }
 
@@ -155,20 +196,21 @@ body {
   margin: 10px 0 0;
   min-height: 16px;
   font-size: 12px;
-  color: #bfbfbf;
+  color: var(--shell-muted);
 }
 
 body.prelaunch .wallet-bar,
 body.prelaunch .hud,
 body.prelaunch .help,
 body.prelaunch .quest-banner {
-  opacity: 0;
+  opacity: 0.2;
+  filter: grayscale(1);
   pointer-events: none;
 }
 
 .wallet-status {
   font-size: 12px;
-  color: var(--muted);
+  color: var(--shell-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -184,8 +226,8 @@ body.prelaunch .quest-banner {
   justify-content: space-between;
   align-items: center;
   padding: 10px 16px;
-  background: var(--panel);
-  border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--shell-card) 88%, transparent);
+  border-bottom: 1px solid var(--shell-line);
   backdrop-filter: blur(6px);
 }
 
@@ -193,14 +235,15 @@ body.prelaunch .quest-banner {
   font-size: 18px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--accent);
+  color: var(--shell-text);
+  font-family: "Bebas Neue", sans-serif;
 }
 
 .stats {
   display: flex;
   gap: 18px;
   font-size: 13px;
-  color: var(--muted);
+  color: var(--shell-muted);
 }
 
 .help {
@@ -211,14 +254,14 @@ body.prelaunch .quest-banner {
   max-width: min(560px, 92vw);
   font-size: 12px;
   line-height: 1.5;
-  color: var(--muted);
+  color: var(--shell-muted);
   padding: 10px 12px;
-  border: 1px solid var(--line);
-  background: var(--panel);
+  border: 1px solid var(--shell-line);
+  background: color-mix(in srgb, var(--shell-card) 88%, transparent);
 }
 
 .help a {
-  color: var(--accent);
+  color: var(--shell-text);
   margin-left: 12px;
   text-decoration: none;
 }
@@ -233,9 +276,9 @@ body.prelaunch .quest-banner {
   top: 102px;
   transform: translateX(-50%);
   z-index: 20;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  color: var(--text);
+  background: color-mix(in srgb, var(--shell-card) 90%, transparent);
+  border: 1px solid var(--shell-line);
+  color: var(--shell-text);
   padding: 8px 12px;
   font-size: 12px;
   max-width: min(820px, 95vw);
@@ -253,21 +296,21 @@ body.prelaunch .quest-banner {
   transform: translateX(-50%);
   width: min(620px, 95vw);
   z-index: 25;
-  background: rgba(8, 17, 20, 0.92);
-  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--shell-card) 88%, transparent);
+  border: 1px solid var(--shell-line);
   padding: 14px;
 }
 
 .dialogue-name {
   font-size: 14px;
-  color: var(--accent);
+  color: var(--shell-text);
   margin-bottom: 8px;
   letter-spacing: 0.06em;
 }
 
 .dialogue-text {
   font-size: 13px;
-  color: var(--text);
+  color: var(--shell-text);
   line-height: 1.5;
 }
 
@@ -276,16 +319,16 @@ body.prelaunch .quest-banner {
 }
 
 .btn {
-  background: #2d2d2d;
-  color: #f0f0f0;
-  border: 1px solid var(--line);
+  background: var(--shell-btn);
+  color: var(--shell-text);
+  border: 1px solid var(--shell-line);
   padding: 8px 12px;
   font-family: inherit;
   cursor: pointer;
 }
 
 .btn.alt {
-  background: #1f1f1f;
+  background: var(--shell-btn-alt);
 }
 
 .btn:hover {

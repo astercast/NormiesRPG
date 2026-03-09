@@ -116,6 +116,8 @@ const ui = {
   walletRefresh: document.getElementById('btn-wallet-refresh'),
   launchWallet: document.getElementById('btn-launch-wallet'),
   launchDemo: document.getElementById('btn-launch-demo'),
+  themeToggle: document.getElementById('btn-theme-toggle'),
+  launchThemeToggle: document.getElementById('btn-theme-toggle-launch'),
   walletConnect: document.getElementById('btn-wallet-connect'),
   walletDemo: document.getElementById('btn-wallet-demo'),
   walletStatus: document.getElementById('wallet-status'),
@@ -159,6 +161,7 @@ let menuOpen = false;
 let shopOpen = false;
 let detectedWallets = [];
 let selectedWalletId = null;
+let uiTheme = 'dark';
 const LEAD_NORMIE_TEXTURE_KEY = 'leadNormieAvatar';
 
 function randInt(min, max) {
@@ -278,6 +281,24 @@ function updateWalletStatus(msg = null) {
 
 function setLaunchStatus(message) {
   if (ui.launchStatus) ui.launchStatus.textContent = message;
+}
+
+function applyUiTheme(theme) {
+  uiTheme = theme === 'light' ? 'light' : 'dark';
+  document.body.dataset.uiTheme = uiTheme;
+  const nextLabel = uiTheme === 'dark' ? 'Light UI' : 'Dark UI';
+  if (ui.themeToggle) ui.themeToggle.textContent = nextLabel;
+  if (ui.launchThemeToggle) ui.launchThemeToggle.textContent = nextLabel;
+  localStorage.setItem('normies-ui-theme', uiTheme);
+}
+
+function toggleUiTheme() {
+  applyUiTheme(uiTheme === 'dark' ? 'light' : 'dark');
+}
+
+function initUiTheme() {
+  const saved = localStorage.getItem('normies-ui-theme');
+  applyUiTheme(saved || 'dark');
 }
 
 function walletErrorMessage(err) {
@@ -1359,6 +1380,8 @@ ui.walletDemo.addEventListener('click', hydrateDemoParty);
 ui.walletRefresh?.addEventListener('click', renderWalletChoices);
 ui.launchWallet?.addEventListener('click', () => hydrateWalletParty(selectedWalletId));
 ui.launchDemo?.addEventListener('click', launchDemoMode);
+ui.themeToggle?.addEventListener('click', toggleUiTheme);
+ui.launchThemeToggle?.addEventListener('click', toggleUiTheme);
 
 window.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
@@ -1384,5 +1407,6 @@ window.addEventListener('resize', () => {
   if (gameRef) gameRef.scale.resize(window.innerWidth, window.innerHeight);
 });
 
+initUiTheme();
 renderWalletChoices();
 updateHud('Verdant Town');
