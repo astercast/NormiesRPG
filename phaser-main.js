@@ -238,7 +238,7 @@ function leadNormie() {
  * @param {number} size    output pixel size (should be a multiple of 40)
  * @returns {HTMLCanvasElement}
  */
-function buildNormiePortraitCanvas(pixels, size) {
+function buildNormiePortraitCanvas(pixels, size, fillColor) {
   const S = Math.max(1, Math.round((size || 120) / 40));
   const W = 40, H = 40;
   const cv = document.createElement('canvas');
@@ -246,6 +246,7 @@ function buildNormiePortraitCanvas(pixels, size) {
   const ctx = cv.getContext('2d');
   ctx.clearRect(0, 0, cv.width, cv.height);
   const px = typeof pixels === 'string' ? pixels : '';
+  const skinFill = fillColor || '#d8cfc4';
   if (px.length >= 1600) {
     // BFS flood-fill from border edge-cells to find exterior (background) region
     const outside = new Uint8Array(W * H);
@@ -273,7 +274,7 @@ function buildNormiePortraitCanvas(pixels, size) {
       }
     }
     // Interior '0' pixels = body fill
-    ctx.fillStyle = '#d8d8d8';
+    ctx.fillStyle = skinFill;
     for (let y = 0; y < H; y++)
       for (let x = 0; x < W; x++)
         if (px[y * W + x] !== '1' && !outside[y * W + x])
@@ -293,7 +294,10 @@ function buildLeadNormieTexture() {
     const lead = leadNormie();
     const px = lead?.pixels || '';
     if (!px || px.length < 1600) { resolve(false); return; }
-    const cv = buildNormiePortraitCanvas(px, 120); // 40 × 3 = 120×120
+    // Type-based skin fill so different Normies look distinct
+    const TYPE_FILL = { Human: '#d8c8b0', Cat: '#d4a06a', Alien: '#88c888', Agent: '#8899cc' };
+    const fillColor = TYPE_FILL[lead?.type] || '#d8c8b0';
+    const cv = buildNormiePortraitCanvas(px, 120, fillColor); // 40 × 3 = 120×120
     const img = new Image();
     img.onload = () => {
       if (!gameRef) { resolve(false); return; }
@@ -1702,6 +1706,15 @@ class OverworldScene extends Phaser.Scene {
   }
 
   update(_, delta) {
+    // Failsafe unlock: once the launch overlay is dismissed and no panel is open,
+    // movement must be free regardless of any missed bus event.
+    if (this.overlayLocked &&
+        ui.launchOverlay?.classList.contains('hidden') &&
+        ui.dialogue.classList.contains('hidden') &&
+        !menuOpen && !shopOpen) {
+      this.overlayLocked = false;
+    }
+
     const interactPressed = this.keys.E.isDown;
     const menuPressed = this.keys.I.isDown;
 

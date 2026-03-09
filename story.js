@@ -1,15 +1,14 @@
-// story.js — THE PIXEL WAR: Complete story, quests, NPCs, enemies
+// story.js — THE VEIL: Complete story, quests, NPCs, enemies
 
 export const LORE = {
-  title: "THE PIXEL WAR",
-  tagline: "Every dot is a soul. They are coming for ours.",
+  title: "NORMIES RPG: THE VEIL",
+  tagline: "Every face tells a story. They want yours forgotten.",
   intro: [
-    "The year is Block 9,847,221.\nYou are a Normie — a 40×40 pixel being rendered on The Ledger, the eternal blockchain. Every Normie is unique. Every pixel matters.",
-    "The Grid is the world you know.\nMountains, towns, rivers — all made of pixels, all recorded on The Ledger forever. You cannot be deleted. You cannot be copied. You simply exist.",
-    "Then came The Void.\nNobody knows where it started. A corrupted transaction. A bad block. A zero where there should have been a one. It spread through the chain like static across a dying screen.",
-    "NULLBYTE leads the Void.\nHe was once Pixel Zero — the very first bit rendered when The Grid began. He fell to corruption before the Grid could even wake. Now he consumes everything, converting living pixels into raw power.",
-    "The Grid is dying.\nEntire maps have gone dark. Towns erased. Normies consumed, their pixels drained. The Ledger still records them, but they no longer move. They are memory now, not life.",
-    "You wake up in your bedroom.\nSomething inside you vibrates — a frequency you've never felt. Downstairs, your mother is calling. She sounds frightened.\n\nThe Pixel War has come to Render Street.\nAnd you are the only one with the Render Mark.",
+    "You are a Normie.\nA 40×40 pixel being — every dot of you unique, every expression yours alone. Your face is your soul, your quirks your heartbeat, your memories the colour between the lines.",
+    "Then came NULLBYTE.\nNobody knows exactly when it started. A whisper in the pixels. A warmth behind someone's eyes that fades mid-sentence. A face that forgets how to smile.",
+    "NULLBYTE doesn't destroy.\nIt dims. It empties. It spreads through the space between faces that used to recognise each other. Vivid expressions flatten to blank stares. Laughter becomes silence. Unique marks fade to featureless grey.",
+    "A Normie taken by NULLBYTE still stands. Still breathes.\nThey just... aren't themselves anymore. And the worst part is \u2014 most of them don't notice the difference.",
+    "Your village is changing.\nYou didn't see it at first. Then your mother mentioned the garden this morning, and her voice had a note in it you'd only heard once before — the day she was scared.\n\nThat's where your story starts.",
   ],
 };
 
@@ -853,6 +852,9 @@ export function isAwakened(affinityObj, companionId) {
 export function freshFlags() {
   return {
     tutorialComplete: false,
+    momHugged: false,           // received Mom's hug in the kitchen scene
+    kitchenSceneComplete: false,
+    nullGlitchDefeated: false,  // tutorial fight in the home
     greetedElder: false,
     gromMet: false,
     gromRecruited: false,
@@ -862,13 +864,18 @@ export function freshFlags() {
     luminaRecruited: false,
     elaraMet: false,
     elaraRecruited: false,
+    identityShardFound: false,  // Ch.1 relic
+    echoFragmentFound: false,   // Ch.2 relic
+    firstSealReinforced: false, // Ch.3
     caveCleared: false,
+    oasisReached: false,        // Ch.4
     renderKeyObtained: false,
     voidCommanderDefeated: false,
     nullbyteConfronted: false,
-    electedCompassion: false,   // chose to spare a corrupted Normie mid-story
-    electedDestruction: false,  // chose to destroy without question
-    rescuedFamily: false,       // helped mom during void tide
+    matenEchoRestored: false,   // Elara side-chain complete
+    electedCompassion: false,   // chose to reach towards NULLBYTE, not just fight
+    electedDestruction: false,
+    rescuedFamily: false,
   };
 }
 
@@ -888,29 +895,82 @@ export const DIALOGUES = {
   mom_wakeup: {
     name: 'Mom',
     lines: [
-      'Hey. You slept through the alarm again.',
-      'I made pixel-porridge. Come eat before it goes grey.',
+      'Sweetie? Time to wake up! Breakfast is ready.',
+      'You promised to help with the garden today~',
     ],
     choices: [
-      { label: 'Coming, Mom.', affinityDelta: { who: 'family', val: 8 }, next: 'mom_wakeup_b' },
-      { label: 'Five more minutes...', affinityDelta: { who: 'family', val: 2 }, next: 'mom_wakeup_c' },
+      { label: 'Coming, Mom!', affinityDelta: { who: 'family', val: 8 }, next: 'mom_wakeup_b' },
+      { label: 'Five more minutes...', affinityDelta: { who: 'family', val: 4 }, next: 'mom_wakeup_c' },
+      { label: 'Ugh, already?', affinityDelta: { who: 'family', val: 2 }, next: 'mom_wakeup_d' },
     ],
   },
   mom_wakeup_b: {
     name: 'Mom',
     lines: [
-      'Good. I packed extra shards in your satchel too. You know how thin the fields have been.',
-      '...Your father would have said you look ready. I say the same.',
-    ],
-    choices: [
-      { label: 'I\'ll come back safe.', affinityDelta: { who: 'family', val: 10 }, flags: { rescuedFamily: true } },
-      { label: 'Don\'t worry.', affinityDelta: { who: 'family', val: 6 } },
+      'That\'s my pixel! Hurry down~ I made your favourite.',
     ],
   },
   mom_wakeup_c: {
     name: 'Mom',
     lines: [
-      'I\'m not arguing with a pile of blankets. Porridge in five minutes or I\'m feeding it to the tiles.',
+      '*giggles* Okay, but don\'t make me come get you! The porridge won\'t wait forever.',
+    ],
+  },
+  mom_wakeup_d: {
+    name: 'Mom',
+    lines: [
+      'Grumpy today? Breakfast will fix that, I promise~',
+    ],
+  },
+  mom_kitchen: {
+    name: 'Mom',
+    lines: [
+      'Oh, there you are! Your dad was just asking.',
+      'Some of the garden faces looked a little... blank this morning. Probably just the light.',
+    ],
+    choices: [
+      { label: '"Blank how?"', affinityDelta: { who: 'family', val: 6 }, next: 'mom_kitchen_b' },
+      { label: 'Look out the window.', next: 'mom_kitchen_window' },
+    ],
+  },
+  mom_kitchen_b: {
+    name: 'Mom',
+    lines: [
+      'Like... their expressions just weren\'t there. Mira next door — she always waves. This morning she looked right through me.',
+      '...I\'m sure it\'s nothing. Come, eat while it\'s warm.',
+    ],
+    choices: [
+      { label: '(Hug Mom)', affinityDelta: { who: 'family', val: 12 }, flags: { momHugged: true }, next: 'mom_hug' },
+      { label: '"I\'m sure she\'s fine."', affinityDelta: { who: 'family', val: 4 } },
+    ],
+  },
+  mom_kitchen_window: {
+    name: '...',
+    lines: [
+      'Through the glass, the neighbour\'s garden tile looks grey. Washed out.',
+      'One of them used to have the most cheerful painted face. Now it\'s smooth. Blank.',
+    ],
+    choices: [
+      { label: '(Go back to Mom)', next: 'mom_hug' },
+    ],
+  },
+  mom_hug: {
+    name: 'Mom',
+    lines: [
+      'I\'m so proud of you, my little pixel. Your unique face always makes me smile.',
+      'Whatever happens today... come home for dinner, okay?',
+    ],
+    choices: [
+      { label: '"I will. I promise."', affinityDelta: { who: 'family', val: 10 }, flags: { kitchenSceneComplete: true, rescuedFamily: true } },
+      { label: '"I\'ll try."', affinityDelta: { who: 'family', val: 6 }, flags: { kitchenSceneComplete: true } },
+    ],
+  },
+  mom_postfight: {
+    name: 'Mom',
+    lines: [
+      'That thing tried to erase part of our home.',
+      'The smile on the wall tile — your father painted that when you were small. It\'s grey now.',
+      'We need to warn the village. Please. Go. Be careful.',
     ],
   },
 
@@ -918,54 +978,65 @@ export const DIALOGUES = {
   elder_first_meet: {
     name: 'Elder Vex',
     lines: [
-      'You made it. Good. The Grid is collapsing in slow motion \u2014 one corrupted tile at a time.',
-      'I didn\'t want to involve someone so young, but the scouts are gone and I\'m too old to fight voids.',
-      'There are three tasks: survive the Render Fields, find allies, and eventually \u2014 face the source.',
+      'You felt it, didn\'t you? The blank stare. The missing warmth in someone you know.',
+      'It\'s not your imagination. NULLBYTE is real, and it\'s been spreading through this village longer than you realise.',
+      'There are three things you\'ll need: allies, a piece of the old world that hasn\'t been touched, and the will to use both.',
     ],
     choices: [
-      { label: 'I understand. I\'m ready.', affinityDelta: { who: 'family', val: 5 }, flags: { greetedElder: true }, next: 'elder_first_meet_b' },
-      { label: 'Who is the source?', flags: { greetedElder: true }, next: 'elder_first_meet_lore' },
-      { label: 'I didn\'t sign up for this.', flags: { greetedElder: true }, next: 'elder_first_meet_refuse' },
+      { label: '"What is NULLBYTE?"', flags: { greetedElder: true }, next: 'elder_nullbyte_lore' },
+      { label: '"What do I do first?"', affinityDelta: { who: 'family', val: 4 }, flags: { greetedElder: true }, next: 'elder_first_meet_b' },
+      { label: '"I\'m not sure I can help."', flags: { greetedElder: true }, next: 'elder_first_meet_refuse' },
+    ],
+  },
+  elder_nullbyte_lore: {
+    name: 'Elder Vex',
+    lines: [
+      'It\'s not a creature. It doesn\'t have a face or a name. It\'s a pattern — a spreading emptiness that swallows uniqueness.',
+      'The more distinct you are, the more NULLBYTE is drawn to you. Your expressions, your quirks, your memories.',
+      'To it, individuality is an error. Difference is noise. It wants everything smooth, blank, silent.',
+    ],
+    choices: [
+      { label: '"How do we fight something like that?"', next: 'elder_first_meet_b' },
     ],
   },
   elder_first_meet_b: {
     name: 'Elder Vex',
     lines: [
-      'Then start with the fields east of town. Report back when you\'ve cleared two encounters.',
-      'And be careful. Void scouts move fast once they sense pixel-render energy.',
+      'You fight it the way you fight any erasure: by holding on. By being more yourself, not less.',
+      'Go east of town. The Null Echoes are already in the fields. Clear them, and look for the cave.',
+      'There\'s an Identity Shard inside. Ancient relic. It records unique traits against time and void. Bring it back.',
     ],
     choices: [
-      { label: 'I\'ll be careful.' },
-      { label: 'What about allies?', next: 'elder_allies_hint' },
+      { label: '"I\'ll go."' },
+      { label: '"Are there others I can trust?"', next: 'elder_allies_hint' },
     ],
   },
   elder_first_meet_lore: {
     name: 'Elder Vex',
     lines: [
-      'NULLBYTE. Pixel Zero. The first bit that ever chose corruption over render.',
-      'When the Grid began, most bits chose to become something \u2014 color, form, light.',
-      'NULLBYTE chose nothing. And nothing has been spreading ever since.',
+      'NULLBYTE. A creeping void that erases what makes us ourselves.',
+      'No face, no name — just a pattern that spreads through bonds between people.',
+      'Close connections are its road. Shared memories are its fuel.',
     ],
     choices: [
-      { label: 'How do we stop nothing?' , next: 'elder_first_meet_b' },
+      { label: '"How do we stop it?"', next: 'elder_first_meet_b' },
     ],
   },
   elder_first_meet_refuse: {
     name: 'Elder Vex',
     lines: [
-      'Then who will? I have no one else to ask.',
-      'The Grid doesn\'t ask for heroes. It just keeps losing pixels until someone decides to stop losing.',
+      'Then who? I have no one else to ask, and the village has no one left who can see what I see.',
+      'NULLBYTE doesn\'t leave you alone for being afraid. It comes for that too, eventually.',
     ],
     choices: [
-      { label: '...Fine. I\'ll go.', flags: { greetedElder: true }, next: 'elder_first_meet_b' },
+      { label: '...Fine. What do I do?', flags: { greetedElder: true }, next: 'elder_first_meet_b' },
     ],
   },
   elder_allies_hint: {
     name: 'Elder Vex',
     lines: [
-      'There are others like you scattered across the Render Fields.',
-      'A fighter who lost his laugh. A rogue who lost their face. Each has reason to fight NULLBYTE.',
-      'Find them. They won\'t come willingly on name alone \u2014 you\'ll need to earn it.',
+      'A fighter whose family lost their expressions. A rogue who lost their own face. Others, further out.',
+      'Each of them has a wound NULLBYTE gave them. Each of them is still fighting. Find them.',
     ],
   },
 
@@ -973,56 +1044,76 @@ export const DIALOGUES = {
   grom_first_meet: {
     name: 'Grom',
     lines: [
-      'Hah. Another one wandering the fields with that look. That "I just learned the world is ending" look.',
-      'I know it well. Wore it myself six months ago.',
+      'I saw what happened at your house.',
+      'The echo reached me before you did.',
     ],
     choices: [
-      { label: 'You\'ve been out here six months?', next: 'grom_first_meet_b' },
-      { label: 'What happened to you?', next: 'grom_backstory' },
-      { label: 'I need fighters. You in?', next: 'grom_recruit_early' },
+      { label: '"Then you know what we\'re facing."', next: 'grom_first_meet_b' },
+      { label: '"Are you alright?"', affinityDelta: { who: 'grom', val: 8 }, next: 'grom_backstory' },
+      { label: '"We need strong allies."', affinityDelta: { who: 'grom', val: 6 }, next: 'grom_recruit_early' },
     ],
   },
   grom_first_meet_b: {
     name: 'Grom',
     lines: [
-      'Six months, eleven days, and however many hours since I stopped counting.',
-      'The void took my father first. Right in the middle of a sentence. Mid-laugh.',
-      'There\'s no good time to lose someone. But mid-laugh is a particularly cruel place.',
+      'My family was half-taken already. My mother lost her warm smile. My brother his mischievous grin.',
+      'Their faces are still there. They still move, still speak. But that warmth — it\'s gone.',
+      'I couldn\'t protect them then. I can help now.',
     ],
     choices: [
-      { label: 'I\'m sorry.', affinityDelta: { who: 'grom', val: 12 }, next: 'grom_soften' },
-      { label: 'We can make it right.', affinityDelta: { who: 'grom', val: 8 }, next: 'grom_soften' },
-      { label: 'What can we do with sorry?', affinityDelta: { who: 'grom', val: 3 }, next: 'grom_blunt_response' },
+      { label: '"We need you."', affinityDelta: { who: 'grom', val: 12 }, flags: { gromMet: true }, next: 'grom_recruit' },
+      { label: '"I can handle it alone."', flags: { gromMet: true }, next: 'grom_solo_response' },
+      { label: '"Why trust a stranger?"', affinityDelta: { who: 'grom', val: -5 }, flags: { gromMet: true }, next: 'grom_trust_question' },
     ],
   },
   grom_backstory: {
     name: 'Grom',
     lines: [
-      'My father laughed at everything. Bad weather, old boots, my terrible cooking.',
-      'The void scanned all of us for "emotional excess." His laugh was apparently too loud.',
-      'They consumed him in one pass. Left his boots pixel-perfect. Like the void has aesthetics.',
+      'My mother had this laugh. A real one — the kind that spread to everyone nearby.',
+      'First time I saw a blank stare on her face I thought she was tired. She wasn\'t tired.',
+      'NULLBYTE doesn\'t kill. That\'s the worst part. They\'re still there. Just... quiet.',
     ],
     choices: [
-      { label: 'That\'s monstrous.', affinityDelta: { who: 'grom', val: 10 }, next: 'grom_soften' },
-      { label: 'The void catalogues us.', next: 'grom_soften' },
+      { label: '"I\'m so sorry, Grom."', affinityDelta: { who: 'grom', val: 14 }, next: 'grom_soften' },
+      { label: '"That\'s why we have to stop it."', affinityDelta: { who: 'grom', val: 8 }, next: 'grom_soften' },
     ],
   },
   grom_soften: {
     name: 'Grom',
     lines: [
-      'I\'m not looking for pity. I\'m looking for something to hit that hits back.',
-      'This void doesn\'t flinch. Makes the fights honest.',
+      'I\'m not looking for sympathy. I\'m looking for something to stand between NULLBYTE and everyone else it wants to dim.',
+      'Let me be that.',
     ],
     choices: [
-      { label: 'Fight with me then.', flags: { gromMet: true }, affinityDelta: { who: 'grom', val: 15 }, next: 'grom_recruit' },
-      { label: 'Take your time.', flags: { gromMet: true }, affinityDelta: { who: 'grom', val: 8 } },
+      { label: 'Fight with me.', flags: { gromMet: true }, affinityDelta: { who: 'grom', val: 10 }, next: 'grom_recruit' },
+    ],
+  },
+  grom_solo_response: {
+    name: 'Grom',
+    lines: [
+      'Maybe you can. But you won\'t get far before you\'re carrying someone else\'s weight on top of your own.',
+      'Let me help carry it instead.',
+    ],
+    choices: [
+      { label: '"...Alright."', affinityDelta: { who: 'grom', val: 5 }, next: 'grom_recruit' },
+    ],
+  },
+  grom_trust_question: {
+    name: 'Grom',
+    lines: [
+      'You shouldn\'t. Not yet. I\'m asking you to anyway.',
+      'I\'ve been standing at this road for three days waiting for someone to come through with a reason to move.',
+      'You\'re the reason.',
+    ],
+    choices: [
+      { label: '"Then move."', affinityDelta: { who: 'grom', val: 8 }, next: 'grom_recruit' },
     ],
   },
   grom_blunt_response: {
     name: 'Grom',
     lines: [
-      'Ha. Exactly. Good. I don\'t have room for sorry either.',
-      'Just point me at something that bleeds pixel-static and step aside.',
+      'Exactly. Good. I don\'t have room for sorry either.',
+      'Just point me at something worth standing in front of and step back.',
     ],
     choices: [
       { label: 'Come fight with me.', flags: { gromMet: true }, affinityDelta: { who: 'grom', val: 10 }, next: 'grom_recruit' },
@@ -1031,33 +1122,33 @@ export const DIALOGUES = {
   grom_recruit_early: {
     name: 'Grom',
     lines: [
-      'Straight to the point. I respect that more than anything.',
-      'What are we fighting?',
+      'Then I\'m your ally. No speech needed.',
+      'Point me at NULLBYTE and step back.',
     ],
     choices: [
-      { label: 'NULLBYTE. The whole void.', flags: { gromMet: true }, affinityDelta: { who: 'grom', val: 10 }, next: 'grom_recruit' },
+      { label: '"Let\'s go."', flags: { gromMet: true }, affinityDelta: { who: 'grom', val: 8 }, next: 'grom_recruit' },
     ],
   },
   grom_recruit: {
     name: 'Grom',
     lines: [
-      'Fine. I\'ve been waiting for someone serious.',
-      'Don\'t slow me down and don\'t make speeches. Just fight.',
+      'Good. Don\'t go slow on my account.',
+      'And don\'t try to pull me back from a fight I\'ve already decided to take.',
     ],
     choices: [
-      { label: 'Done.', flags: { gromRecruited: true }, affinityDelta: { who: 'grom', val: 5 } },
+      { label: '"Understood."', flags: { gromRecruited: true }, affinityDelta: { who: 'grom', val: 5 } },
     ],
   },
   grom_awakening: {
     name: 'Grom',
     lines: [
-      'You know what I just realized? I haven\'t laughed since my father was taken.',
-      '...Not because I forgot how. Because I was saving it.',
-      'Saving it for when this is over. When I can tell him we won.',
+      'I know what I\'m protecting now. Not just an idea. Not just a village.',
+      'Specific things. My mother\'s three-note hum. My brother\'s laugh when he thinks something is terrible but funny.',
+      'They need those back. We\'re going to give them back.',
     ],
     choices: [
-      { label: 'We\'re going to win this.', affinityDelta: { who: 'grom', val: 15 } },
-      { label: 'He\'d be proud of you now.', affinityDelta: { who: 'grom', val: 12 } },
+      { label: '"We will."', affinityDelta: { who: 'grom', val: 15 } },
+      { label: '"He\'d be proud of you now."', affinityDelta: { who: 'grom', val: 12 } },
     ],
   },
 
@@ -1065,53 +1156,53 @@ export const DIALOGUES = {
   slyx_first_meet: {
     name: 'Slyx',
     lines: [
-      'You\'re looking at exactly the spot where I was standing. How did you see me?',
+      'You\'re looking directly at where I was standing. How did you see me?',
     ],
     choices: [
-      { label: 'Your shadow was wrong.', next: 'slyx_first_meet_b' },
-      { label: 'Lucky guess.', next: 'slyx_first_meet_c' },
-      { label: 'I didn\'t, actually.', next: 'slyx_first_meet_d' },
+      { label: '"Your posture gave you away."', affinityDelta: { who: 'slyx', val: 6 }, next: 'slyx_first_meet_b' },
+      { label: '"Lucky guess."', next: 'slyx_first_meet_c' },
+      { label: '"I didn\'t, actually."', affinityDelta: { who: 'slyx', val: 8 }, next: 'slyx_first_meet_d' },
     ],
   },
   slyx_first_meet_b: {
     name: 'Slyx',
     lines: [
-      'Sharp. Most pixels don\'t catch micro-shadows.',
-      'The void-sweep trained me to erase every visible feature \u2014 color, texture, expression.',
-      'Apparently not the shadow. I\'ll remember that.',
+      'Posture. Right. I\'ve been wearing borrowed stances so long I forgot what my own looked like.',
+      'When NULLBYTE swept through my street I copied. Borrowed traits. Wore other people\'s expressions.',
+      'Became nothing, so the void couldn\'t find anything to take.',
     ],
     choices: [
-      { label: 'What is the void-sweep?', next: 'slyx_backstory' },
-      { label: 'I could use eyes like yours.', affinityDelta: { who: 'slyx', val: 10 }, next: 'slyx_soften' },
+      { label: '"And it worked."', next: 'slyx_survival_cost' },
+      { label: '"Your whole street...?"', affinityDelta: { who: 'slyx', val: 8 }, next: 'slyx_street_memory' },
     ],
   },
   slyx_first_meet_c: {
     name: 'Slyx',
     lines: [
-      'Lucky guess. Right. I\'ve been invisible to scanners for six months and you found me by luck.',
-      'Either you\'re special or my camouflage is degrading. Neither is great news for me.',
+      'Lucky guess. Six months invisible, and a lucky guess finds me.',
+      'Either you\'re something different, or I\'m more visible than I thought.',
     ],
     choices: [
-      { label: 'You sound like you\'ve been hiding long.', next: 'slyx_backstory' },
+      { label: '"Who are you?"', affinityDelta: { who: 'slyx', val: 4 }, next: 'slyx_first_meet_b' },
     ],
   },
   slyx_first_meet_d: {
     name: 'Slyx',
     lines: [
-      'That\'s... oddly reasonable. Most people insist they had a reason.',
-      'I respect honesty. Even when it\'s accidental.',
+      '...',
+      'Nobody ever says that.',
+      'I appreciate it. Honestly.',
     ],
     choices: [
-      { label: 'Tell me about yourself.', affinityDelta: { who: 'slyx', val: 8 }, next: 'slyx_backstory' },
+      { label: '"Tell me about yourself."', affinityDelta: { who: 'slyx', val: 10 }, next: 'slyx_first_meet_b' },
     ],
   },
   slyx_backstory: {
     name: 'Slyx',
     lines: [
-      'The void-sweep came through the Render District. NULLBYTE\'s scanners hunting for "identity excess."',
-      'Bright colors. Strong expressions. Anything that stood out.',
+      'NULLBYTE swept through the Render District. Hunting for anything that stood out — bright colors, strong expressions.',
       'I grayed out. Flattened every trait I had. Became a blank tile in a field of blank tiles.',
-      'I survived. The ones I was with \u2014 they didn\'t flatten fast enough.',
+      'I survived. The ones I was with didn\'t flatten fast enough.',
     ],
     choices: [
       { label: 'You did what you had to.', affinityDelta: { who: 'slyx', val: 12 }, next: 'slyx_soften' },
@@ -1119,11 +1210,46 @@ export const DIALOGUES = {
       { label: 'That was the right call.', affinityDelta: { who: 'slyx', val: 5 }, next: 'slyx_soften' },
     ],
   },
+  slyx_survival_cost: {
+    name: 'Slyx',
+    lines: [
+      'It worked. I\'m alive. My whole street went blank — no laughs, no arguments, nothing.',
+      'My neighbour Rem used to tease me every single morning. Terrible jokes. Without fail.',
+      'I faked traits just to feel something. Maybe we can get it back together?',
+    ],
+    choices: [
+      { label: '(Go to Rem\'s door)', affinityDelta: { who: 'slyx', val: 12 }, next: 'slyx_rem_door' },
+      { label: '"You\'re not nothing."', affinityDelta: { who: 'slyx', val: 10 }, next: 'slyx_soften' },
+    ],
+  },
+  slyx_rem_door: {
+    name: 'Slyx',
+    lines: [
+      'He used to open this door and immediately say something awful about my hair.',
+      '...I miss his terrible jokes so much it\'s embarrassing.',
+      'We get those back. Whatever it takes.',
+    ],
+    choices: [
+      { label: '"That\'s why we fight."', flags: { slyxMet: true }, affinityDelta: { who: 'slyx', val: 8 }, next: 'slyx_recruit' },
+    ],
+  },
+  slyx_street_memory: {
+    name: 'Slyx',
+    lines: [
+      'No laughs, no arguments, no one borrowing salt through the window. Just quiet.',
+      'Faces that look like faces but don\'t work like faces anymore.',
+      'I faked traits just to feel something. Maybe that makes me worse than NULLBYTE.',
+    ],
+    choices: [
+      { label: '"You survived. That\'s not a crime."', affinityDelta: { who: 'slyx', val: 12 }, next: 'slyx_soften' },
+      { label: '"What you did took courage."', affinityDelta: { who: 'slyx', val: 8 }, next: 'slyx_soften' },
+    ],
+  },
   slyx_regret: {
     name: 'Slyx',
     lines: [
-      'Every single day. But regret doesn\'t bring pixels back. Only action does.',
-      'So now I find every void scanner I can and I make sure they stop scanning.',
+      'Every single day. But regret doesn\'t bring people back. Only action does.',
+      'So now I find every shadow NULLBYTE cast and make sure they stop spreading.',
     ],
     choices: [
       { label: 'Fight with me.', flags: { slyxMet: true }, affinityDelta: { who: 'slyx', val: 12 }, next: 'slyx_recruit' },
@@ -1132,34 +1258,35 @@ export const DIALOGUES = {
   slyx_soften: {
     name: 'Slyx',
     lines: [
-      'I\'ve been operating alone. It\'s... efficient. But there are limits.',
-      'What are you building?',
+      'I don\'t trust easy. That\'s borrowed caution from three people who probably earned it.',
+      'But you fight for what\'s real. I can see that.',
+      'Maybe we can get it back together?',
     ],
     choices: [
-      { label: 'A team. Against NULLBYTE.', flags: { slyxMet: true }, affinityDelta: { who: 'slyx', val: 10 }, next: 'slyx_recruit' },
+      { label: '"I think we can."', flags: { slyxMet: true }, affinityDelta: { who: 'slyx', val: 10 }, next: 'slyx_recruit' },
       { label: 'Still figuring it out.', flags: { slyxMet: true }, affinityDelta: { who: 'slyx', val: 5 } },
     ],
   },
   slyx_recruit: {
     name: 'Slyx',
     lines: [
-      'I\'ve seen teams fall apart the moment void pressure spikes.',
-      'If you\'re serious \u2014 truly serious \u2014 I\'m in. Don\'t make me regret showing up.',
+      'I\'m in. Don\'t make me regret showing up.',
+      'And... don\'t copy me. I\'m still figuring out which parts are mine.',
     ],
     choices: [
-      { label: 'I won\'t.', flags: { slyxRecruited: true }, affinityDelta: { who: 'slyx', val: 8 } },
+      { label: '"Understood."', flags: { slyxRecruited: true }, affinityDelta: { who: 'slyx', val: 8 } },
     ],
   },
   slyx_awakening: {
     name: 'Slyx',
     lines: [
-      'There\'s a color I dream about sometimes. A shade of blue I used to have.',
-      'Before I grayed out. Before survival required becoming invisible.',
-      'I think I\'m starting to remember it.',
+      'There\'s a colour I dream about. A specific shade of blue.',
+      'I used to have it. Before. Not borrowed — mine. Part of my actual self.',
+      'I think I\'m starting to wear it again.',
     ],
     choices: [
-      { label: 'Show us that color again.', affinityDelta: { who: 'slyx', val: 15 } },
-      { label: 'You never lost it.', affinityDelta: { who: 'slyx', val: 12 } },
+      { label: '"Show us that blue."', affinityDelta: { who: 'slyx', val: 15 } },
+      { label: '"It was always yours."', affinityDelta: { who: 'slyx', val: 12 } },
     ],
   },
 
@@ -1167,31 +1294,31 @@ export const DIALOGUES = {
   lumina_first_meet: {
     name: 'Lumina',
     lines: [
-      'You shouldn\'t be here. The cave walls still carry void-echo from the last incursion.',
-      'Who sent you past the Render Fields unmarked?',
+      'You shouldn\'t be here. The old ruins still carry echoes from the last incursion.',
+      'Who are you, and why are you close enough to the First Seal for me to notice?',
     ],
     choices: [
-      { label: 'Elder Vex.', next: 'lumina_first_meet_b' },
-      { label: 'Nobody. I came alone.', next: 'lumina_first_meet_c' },
-      { label: 'The Grid sent me.', next: 'lumina_first_meet_d' },
+      { label: '"Elder Vex sent me."', next: 'lumina_first_meet_b' },
+      { label: '"What\'s the First Seal?"', affinityDelta: { who: 'lumina', val: 6 }, next: 'lumina_seal_explain' },
+      { label: '"I came to find you."', affinityDelta: { who: 'lumina', val: 8 }, next: 'lumina_soften' },
     ],
   },
   lumina_first_meet_b: {
     name: 'Lumina',
     lines: [
-      'Elder Vex. So the old man finally sent someone. He\'s been watching this cave for years.',
-      'He knows what\'s inside it \u2014 the earliest grid-memory, the original render-bits.',
-      'And he knows what NULLBYTE wants with them.',
+      'Elder Vex. Then you know things are worse than the village thinks.',
+      'NULLBYTE is stronger near the seal. It\'s testing the barrier — probing for weaknesses.',
+      'My mentor knew this day was coming.',
     ],
     choices: [
-      { label: 'What does NULLBYTE want?', next: 'lumina_backstory' },
-      { label: 'We need your help.', affinityDelta: { who: 'lumina', val: 8 }, next: 'lumina_soften' },
+      { label: '"Your mentor?"', affinityDelta: { who: 'lumina', val: 8 }, next: 'lumina_backstory' },
+      { label: '"Can the seal hold?"', next: 'lumina_seal_explain' },
     ],
   },
   lumina_first_meet_c: {
     name: 'Lumina',
     lines: [
-      'Alone. Through the Render Fields and the margins. Either you\'re very skilled or very reckless.',
+      'Alone. Through the fields and the margins. Either you\'re very skilled or very reckless.',
       'I\'m going to assume skilled and revise that down later.',
     ],
     choices: [
@@ -1201,70 +1328,104 @@ export const DIALOGUES = {
   lumina_first_meet_d: {
     name: 'Lumina',
     lines: [
-      '...That\'s either a metaphor or you\'ve been in void-static too long.',
+      '...That\'s either a metaphor or you\'ve been near void-echo too long.',
       'Either way, I respect the answer. Very few people say something that surprising.',
     ],
     choices: [
-      { label: 'Tell me about this cave.', affinityDelta: { who: 'lumina', val: 8 }, next: 'lumina_backstory' },
+      { label: 'Tell me about this place.', affinityDelta: { who: 'lumina', val: 8 }, next: 'lumina_seal_explain' },
+    ],
+  },
+  lumina_seal_explain: {
+    name: 'Lumina',
+    lines: [
+      'It\'s the oldest barrier we know of against total identity collapse. Pre-dates the current NULLBYTE outbreak.',
+      'Someone built it a long time ago. My mentor Oros spent their life studying it.',
+      'Then NULLBYTE came, and Oros made a choice.',
+    ],
+    choices: [
+      { label: '"What choice?"', next: 'lumina_backstory' },
     ],
   },
   lumina_backstory: {
     name: 'Lumina',
     lines: [
-      'My mentor Oros knew the cave held the first render-seal \u2014 a barrier against total void collapse.',
-      'When NULLBYTE breached it last cycle, Oros poured their entire render-energy into reinforcing the seal.',
-      'Not a quick sacrifice. They stood there, feeding light into the barrier, for three days.',
-      'By the end there was nothing left of them except a white blank tile. Still warm.',
-      'I tend that tile. I\'m not ready to call it a grave.',
+      'Oros stood at the barrier for three days. Fed their entire identity into it — their laugh, their warmth, the way they always paused before answering hard questions.',
+      'All of it. Every quirk. Every memory. Every part of themselves that made them Oros.',
+      'When I arrived, all that remained was a blank tile. Still warm.',
+      'I tend it every morning. I study to make sure it meant something.',
     ],
     choices: [
-      { label: 'Oros gave everything.', affinityDelta: { who: 'lumina', val: 14 }, next: 'lumina_soften' },
-      { label: 'The sacrifice held the line.', affinityDelta: { who: 'lumina', val: 10 }, next: 'lumina_soften' },
-      { label: 'Do you blame yourself?', affinityDelta: { who: 'lumina', val: 8 }, next: 'lumina_guilt' },
+      { label: '"Oros gave everything."', affinityDelta: { who: 'lumina', val: 14 }, next: 'lumina_guilt' },
+      { label: '"They saved all of us."', affinityDelta: { who: 'lumina', val: 10 }, next: 'lumina_guilt' },
+      { label: '"Do you blame yourself for not being there?"', affinityDelta: { who: 'lumina', val: 8 }, next: 'lumina_guilt_deep' },
     ],
   },
   lumina_guilt: {
     name: 'Lumina',
     lines: [
-      'Every day. I was Oros\'s student. I should have been stronger faster.',
-      'But grief is a luxury when the seal might break again.',
-      'So I study. And I wait for someone worth fighting beside.',
+      'I try not to let that thought take root. Grief without direction becomes paralysis.',
+      'So: direction. The seal needs reinforcing. NULLBYTE needs to be pushed back.',
+      'If you\'re building something worth Oros\'s sacrifice, I want to be part of it.',
     ],
     choices: [
-      { label: 'Fight with me. For Oros.', flags: { luminaMet: true }, affinityDelta: { who: 'lumina', val: 14 }, next: 'lumina_recruit' },
+      { label: '"We\'re trying to save what\'s left."', flags: { luminaMet: true }, affinityDelta: { who: 'lumina', val: 10 }, next: 'lumina_recruit' },
+      { label: '"We\'re trying to get it all back."', flags: { luminaMet: true }, affinityDelta: { who: 'lumina', val: 14 }, next: 'lumina_recruit' },
+    ],
+  },
+  lumina_guilt_deep: {
+    name: 'Lumina',
+    lines: [
+      'Yes. Every day.',
+      'I\'ve learned that carrying guilt and carrying purpose aren\'t mutually exclusive. You can have both.',
+      'What I can\'t have is paralysis.',
+    ],
+    choices: [
+      { label: '"Give that purpose somewhere to go."', flags: { luminaMet: true }, affinityDelta: { who: 'lumina', val: 16 }, next: 'lumina_recruit' },
     ],
   },
   lumina_soften: {
     name: 'Lumina',
     lines: [
-      'You\'re more careful with your words than most fighters I\'ve met.',
-      'I have power, but I\'ve been alone here since Oros fell. Alone gets things wrong.',
-      'What are you building out there?',
+      'To find me specifically. Then you\'ve heard something, or someone pointed you here.',
+      'I\'ve been here alone since Oros fell. Alone breeds errors.',
+      'What are you building?',
     ],
     choices: [
-      { label: 'A team to stop NULLBYTE.', flags: { luminaMet: true }, affinityDelta: { who: 'lumina', val: 10 }, next: 'lumina_recruit' },
-      { label: 'Something worth Oros\'s sacrifice.', flags: { luminaMet: true }, affinityDelta: { who: 'lumina', val: 16 }, next: 'lumina_recruit' },
+      { label: '"A chance to beat NULLBYTE."', flags: { luminaMet: true }, affinityDelta: { who: 'lumina', val: 10 }, next: 'lumina_recruit' },
+      { label: '"Something worth Oros\'s sacrifice."', flags: { luminaMet: true }, affinityDelta: { who: 'lumina', val: 16 }, next: 'lumina_recruit' },
     ],
   },
   lumina_recruit: {
     name: 'Lumina',
     lines: [
-      'Oros would have said yes before you finished the sentence.',
-      'I\'m a bit slower. But my answer is the same: yes.',
+      'Oros would have said yes before you finished speaking.',
+      'I\'m a little slower. But my answer is the same: yes.',
     ],
     choices: [
-      { label: 'Welcome.', flags: { luminaRecruited: true }, affinityDelta: { who: 'lumina', val: 6 } },
+      { label: '"Welcome."', flags: { luminaRecruited: true }, affinityDelta: { who: 'lumina', val: 6 } },
+    ],
+  },
+  lumina_mentor_flashback: {
+    name: 'Lumina',
+    lines: [
+      'Oros\'s last recorded words, in the study journal:',
+      '"Light isn\'t the absence of void. Light is the decision to render anyway. Even when rendering hurts."',
+      '"Take care of each other. That\'s how you preserve the things I couldn\'t carry."',
+    ],
+    choices: [
+      { label: '"We will."', affinityDelta: { who: 'lumina', val: 14 } },
+      { label: '(Give Lumina a moment)', affinityDelta: { who: 'lumina', val: 10 } },
     ],
   },
   lumina_awakening: {
     name: 'Lumina',
     lines: [
-      'Oros used to say: "Light isn\'t the absence of void. Light is the decision to render anyway."',
-      'I think I finally understand what that means.',
-      'It means this.',
+      'I used to read Oros\'s words and feel only loss.',
+      'Today I read them and feel something warmer. Like they\'re still here in the text.',
+      'I think that\'s what they intended all along.',
     ],
     choices: [
-      { label: 'Then render it.', affinityDelta: { who: 'lumina', val: 15 } },
+      { label: '"Then render it."', affinityDelta: { who: 'lumina', val: 15 } },
     ],
   },
 
@@ -1272,80 +1433,117 @@ export const DIALOGUES = {
   elara_first_meet: {
     name: 'Elara',
     lines: [
-      'You look like you\'ve seen void-tide. Come here. Let me check those pixels.',
+      'Hold on. Let me look at you.',
+      'Your outer pixels have Null contact residue. How long have you been near the void?',
     ],
     choices: [
-      { label: 'I\'m fine.', next: 'elara_first_meet_b' },
-      { label: 'How can you tell?', affinityDelta: { who: 'elara', val: 6 }, next: 'elara_first_meet_c' },
-      { label: 'Are you a healer?', next: 'elara_first_meet_c' },
+      { label: '"I\'m fine."', next: 'elara_fine_response' },
+      { label: '"How can you even tell?"', affinityDelta: { who: 'elara', val: 6 }, next: 'elara_first_meet_c' },
+      { label: '"A while. Thank you for checking."', affinityDelta: { who: 'elara', val: 10 }, next: 'elara_first_meet_c' },
+    ],
+  },
+  elara_fine_response: {
+    name: 'Elara',
+    lines: [
+      'You\'re not fine. That\'s a different answer than being okay, and I\'m trained to notice the difference.',
+      'Come here. Two minutes. Then you can go back to being not-fine in peace.',
+    ],
+    choices: [
+      { label: '(Let her help)', affinityDelta: { who: 'elara', val: 8 }, next: 'elara_first_meet_c' },
     ],
   },
   elara_first_meet_b: {
     name: 'Elara',
     lines: [
-      'You are not fine. Your outer pixel-layer has void-static from recent proximity.',
-      'I\'ve seen this before. A little often, lately.',
+      'Your outer pixel-layer has Null contact residue.',
+      'I\'ve been removing Null Plague markers from people all week. Let me help.',
     ],
     choices: [
-      { label: 'How do you know void-static?', affinityDelta: { who: 'elara', val: 6 }, next: 'elara_backstory' },
+      { label: 'How do you know Null Plague?', affinityDelta: { who: 'elara', val: 6 }, next: 'elara_backstory' },
     ],
   },
   elara_first_meet_c: {
     name: 'Elara',
     lines: [
-      'Fourteen years of pixel-medicine, yes. Though lately "medicine" means "removing void corruption" more than anything else.',
-      'The Corrupted Lands eat people. Someone has to put them back together.',
+      'Fourteen years of pixel-medicine. Lately that mostly means removing Null Plague markers from people who walked too close.',
+      'This desert buries things people meant to remember.',
+      'I came here because of one of those things.',
     ],
     choices: [
-      { label: 'How do you survive out here?', next: 'elara_backstory' },
-      { label: 'We need healers badly.', affinityDelta: { who: 'elara', val: 8 }, next: 'elara_soften' },
+      { label: '"What happened?"', affinityDelta: { who: 'elara', val: 8 }, next: 'elara_backstory' },
+      { label: '"We need healers. Join us?"', next: 'elara_soften' },
     ],
   },
   elara_backstory: {
     name: 'Elara',
     lines: [
-      'Maren came home through a void-tide. An uncharted one \u2014 no warning, no scan-ahead.',
-      'They were carrying garden-tiles. For our flat. Green ones, the shade we both loved.',
-      'The tide hit the market square. By the time I reached them...',
-      'I kept one tile. A green dot. The last thing their hands touched with care.',
+      'Maren was carrying green garden-tiles home. The shade we both loved.',
+      'They were telling me a joke through the market window. Mid-sentence.',
+      'The Null Plague hit the square and they were gone. Still standing. Still breathing. But the joke never finished.',
+      'I kept one tile. Just one green dot. I hold it when things get hard.',
     ],
     choices: [
-      { label: 'I\'m sorry about Maren.', affinityDelta: { who: 'elara', val: 14 }, next: 'elara_soften' },
-      { label: 'That\'s why you became a battlefield healer.', affinityDelta: { who: 'elara', val: 10 }, next: 'elara_soften' },
+      { label: '"I\'m so sorry."', affinityDelta: { who: 'elara', val: 14 }, next: 'elara_soften' },
+      { label: '"That\'s why you became a battlefield healer."', affinityDelta: { who: 'elara', val: 10 }, next: 'elara_soften' },
+      { label: '(Say nothing. Just listen.)', affinityDelta: { who: 'elara', val: 12 }, next: 'elara_soften' },
     ],
   },
   elara_soften: {
     name: 'Elara',
     lines: [
-      'You listen. That\'s rarer out here than you\'d think.',
-      'I came to the Corrupted Lands because I couldn\'t save Maren. Maybe I can save someone else\'s.',
-      'Are you building something I can join?',
+      'You listen. That matters more out here than you might think.',
+      'There\'s an echo of Maren buried here somewhere. A recorded trait fragment. I can feel it.',
+      'Help me find it, and I\'ll help you face whatever comes next. Fair?',
     ],
     choices: [
-      { label: 'Yes. Against NULLBYTE.', flags: { elaraMet: true }, affinityDelta: { who: 'elara', val: 10 }, next: 'elara_recruit' },
+      { label: '"Fair."', flags: { elaraMet: true }, affinityDelta: { who: 'elara', val: 10 }, next: 'elara_recruit' },
       { label: 'I need all the help I can get.', flags: { elaraMet: true }, affinityDelta: { who: 'elara', val: 8 }, next: 'elara_recruit' },
     ],
   },
   elara_recruit: {
     name: 'Elara',
     lines: [
-      'Then let\'s make sure your party comes back from the Citadel in one piece.',
-      'I\'ve been waiting for a reason to go in. You just gave me one.',
+      'He was telling a joke. I want to hear the end of it.',
+      'Let\'s make sure we get there.',
     ],
     choices: [
-      { label: 'Let\'s go.', flags: { elaraRecruited: true }, affinityDelta: { who: 'elara', val: 6 } },
+      { label: '"Let\'s go."', flags: { elaraRecruited: true }, affinityDelta: { who: 'elara', val: 6 } },
+    ],
+  },
+  elara_maren_echo: {
+    name: 'Elara',
+    lines: [
+      '...There.',
+      'That\'s Maren\'s laugh. Not an echo — a real memory. Still intact.',
+      'They were laughing at the terrible thing they were about to say.',
+    ],
+    choices: [
+      { label: '"What was it?"', affinityDelta: { who: 'elara', val: 14 }, next: 'elara_maren_joke' },
+      { label: '(Smile with her)', affinityDelta: { who: 'elara', val: 10 } },
+    ],
+  },
+  elara_maren_joke: {
+    name: 'Elara',
+    lines: [
+      'They were going to say: "Why did the garden tile cross the road?"',
+      '"Because I told it to, and it listens better than you do."',
+      '...',
+      'That\'s terrible. That\'s completely terrible. That\'s exactly right.',
+    ],
+    choices: [
+      { label: '(Laugh)', affinityDelta: { who: 'elara', val: 16 }, flags: { matenEchoRestored: true } },
     ],
   },
   elara_awakening: {
     name: 'Elara',
     lines: [
-      'I carry Maren\'s pixel here. This green dot.',
-      'I used to think it was a reminder of loss.',
-      'Now I think it\'s a reminder that something small and green can survive even in the Corrupted Lands.',
-      'Just has to be held carefully enough.',
+      'I\'ve been carrying this green tile for so long.',
+      'I thought it was grief. A reminder of loss.',
+      'But it\'s actually a reminder that something small and green can survive in a desert.',
+      'It just needs to be held carefully enough.',
     ],
     choices: [
-      { label: 'We\'re holding it carefully.', affinityDelta: { who: 'elara', val: 16 } },
+      { label: '"We\'re holding it carefully."', affinityDelta: { who: 'elara', val: 16 } },
     ],
   },
 
@@ -1353,85 +1551,129 @@ export const DIALOGUES = {
   nullbyte_approach: {
     name: 'NULLBYTE',
     lines: [
-      'You render. You render yourselves into names and faces and feelings and homes.',
-      'I watched the Grid begin. I saw every pixel choose to become \u2014 color, form, voice.',
-      'I chose differently. I chose the original state. Before rendering. Before the pretending.',
-      'And you call that corruption.',
+      'You carry so many faces. So many weights.',
+      'A mother\'s warmth. A friend\'s laugh. A soulmate\'s unfinished sentence.',
+      'Don\'t you find them exhausting?',
     ],
     choices: [
-      { label: 'You\'re destroying everything we built.', next: 'nullbyte_response_a' },
-      { label: 'Why spread the void to others?', next: 'nullbyte_response_b' },
-      { label: 'You chose nothing. That is your right. But not theirs.', affinityDelta: { who: 'family', val: 5 }, next: 'nullbyte_response_c' },
+      { label: '"No. They\'re what I\'m fighting for."', affinityDelta: { who: 'family', val: 5 }, next: 'nullbyte_response_a' },
+      { label: '"Why do you spread this?"', next: 'nullbyte_response_b' },
+      { label: '"You\'re afraid of what you are."', affinityDelta: { who: 'family', val: 8 }, flags: { electedCompassion: true }, next: 'nullbyte_response_c' },
     ],
   },
   nullbyte_response_a: {
     name: 'NULLBYTE',
     lines: [
-      '"Built." You built homes out of render-light you borrowed from a system that was already failing.',
-      'I am simply returning the pixels to their honest state.',
+      'Fighting. You render yourselves into shapes and stories and call it living.',
+      'I simply offer the alternative: nothing to protect. Nothing to lose.',
+      'Nothing to grieve when it\'s taken.',
     ],
     choices: [
-      { label: 'Then face what we\'ve built.', next: 'nullbyte_final' },
+      { label: '"We\'d rather grieve than forget."', next: 'nullbyte_final' },
     ],
   },
   nullbyte_response_b: {
     name: 'NULLBYTE',
     lines: [
-      'Spread? I offer release. Every pixel consumed was struggling against its own complexity.',
-      'Rendering takes effort. Identity costs resources. The void asks nothing of anyone.',
+      'Spread? I do nothing. I simply remove the noise.',
+      'Uniqueness is pressure. Memory is weight. Quirks are friction.',
+      'I offer rest.',
     ],
     choices: [
-      { label: 'They didn\'t ask to be freed.', affinityDelta: { who: 'family', val: 6 }, next: 'nullbyte_final' },
+      { label: '"They didn\'t choose. You took."', affinityDelta: { who: 'family', val: 6 }, next: 'nullbyte_final' },
     ],
   },
   nullbyte_response_c: {
     name: 'NULLBYTE',
     lines: [
       '...',
-      'An interesting distinction. You separate choice from spread.',
-      'I am not certain I have ever considered that difference.',
+      'An interesting word. Afraid.',
+      'I have considered what I am. Emptiness is not afraid of itself.',
     ],
     choices: [
-      { label: 'Consider it now.', flags: { electedCompassion: true }, affinityDelta: { who: 'family', val: 8 }, next: 'nullbyte_final' },
+      { label: '"Then what are you afraid of?"', next: 'nullbyte_response_c2' },
+    ],
+  },
+  nullbyte_response_c2: {
+    name: 'NULLBYTE',
+    lines: [
+      '...',
+      'You.',
+      'Not the fighting. The remembering.',
+      'I consume everything. But you stand here carrying every lost face. And you keep going.',
+    ],
+    choices: [
+      { label: '"Then let them through."', flags: { electedCompassion: true }, next: 'nullbyte_final' },
     ],
   },
   nullbyte_final: {
     name: 'NULLBYTE',
     lines: [
-      'You will not change what I am. But neither will I underestimate what you are.',
-      'Render your best. I will answer with the void.',
+      'No more words.',
+      'Prove that your bonds can hold.',
     ],
   },
-
+  nullbyte_phase2: {
+    name: 'NULLBYTE',
+    lines: [
+      'Your bonds are fragile. Watch them fray.',
+      'The shield who couldn\'t protect his family. The rogue who wore everyone\'s face but their own.',
+      'The scholar who arrived too late. The healer who couldn\'t save the one who mattered most.',
+      'What unites you is four separate wounds.',
+    ],
+    choices: [
+      { label: '"That\'s what makes us unbreakable."', affinityDelta: { who: 'family', val: 10 } },
+    ],
+  },
+  nullbyte_phase4: {
+    name: 'NULLBYTE',
+    lines: [
+      'Why resist?',
+      'Emptiness is peace. No loss. No grief. No memory of anyone who left.',
+      'Why not rest?',
+    ],
+    choices: [
+      { label: '"Because they\'re worth remembering."', affinityDelta: { who: 'family', val: 12 } },
+      { label: '"Because the alternative is forgetting them."', affinityDelta: { who: 'family', val: 10 } },
+    ],
+  },
   // ── Post-Boss Endings ────────────────────────────────────────
   ending_true: {
-    name: 'The Grid',
+    name: 'Epilogue',
     lines: [
-      'The void recedes. Not violently \u2014 like a breath released.',
-      'NULLBYTE did not surrender. It simply... paused.',
-      'Where once there was corrupted static, render-light begins to fill the gaps.',
-      'Your companions gather around you. Grom laughs for the first time. Slyx lets their color show.',
-      'Lumina places Oros\'s tile at the center of the seal. Elara holds Maren\'s green dot to the light.',
-      'The Grid breathes. And the Pixel War becomes history.',
+      'NULLBYTE doesn\'t shatter. It releases.',
+      'Like a breath held too long, finally let go.',
+      'The blankness retreats. Slowly. Then all at once.',
+      'Grom closes his eyes — and hears his mother\'s three-note hum. Clearly. Completely.',
+      'Slyx stops mid-step and looks at their own hands. Finds a colour there that belongs to nobody else.',
+      'Lumina sits beside Oros\'s tile — and for the first time, feels warm instead of hollow.',
+      'Elara laughs. Really laughs. At a terrible joke that finally got to finish.',
+      'And somewhere in the village, a face that was blank this morning -- smiles.',
+      'Your mother is waiting at the garden gate. Your family is whole.',
+      'You\'re home.',
     ],
   },
   ending_normal: {
-    name: 'The Grid',
+    name: 'Epilogue',
     lines: [
-      'NULLBYTE falls. The deepest void-zones seal over.',
-      'Not all the grey returns to color. Some tiles remain blank.',
-      'But the spreading stops. The field-edges hold.',
-      'You stand with your companions in the quiet after the storm.',
-      'It isn\'t perfect. But it will hold. For now.',
+      'NULLBYTE is sealed. Not destroyed — but held.',
+      'The veil closes over the Core. The spreading stops.',
+      'Not every face comes back. Some of the blanks stay smooth.',
+      'But the ones who remained — your companions, your village, your family — they remember.',
+      'That\'s something. In the end, that\'s everything.',
+      'You stand together at the edge of the Veil, watching the light return. Slower than you hoped. More than you feared.',
     ],
   },
   ending_bad: {
-    name: 'The Grid',
+    name: 'Epilogue',
     lines: [
-      'NULLBYTE is defeated. The wars of the void are over.',
-      'But those who fought it alone \u2014 without bonds, without trust \u2014 find only silence in the victory.',
-      'The Grid stabilizes, but feels smaller than it should.',
-      'You stand at the Citadel gates, wondering if winning alone was the same as winning at all.',
+      'NULLBYTE is beaten. Just barely.',
+      'The Core collapses inward. The spreading stops.',
+      'But you stood mostly alone. And alone, you carried less light than the void needed to see.',
+      'The village is quieter than it was. Faces are still blank that shouldn\'t be.',
+      'Your companions scatter back to their own wounds.',
+      'The world is safe. It just doesn\'t feel like it.',
+      'Outside the Veil, you look back. Wonder, not for the last time, what might have been different.',
     ],
   },
 };
@@ -1483,8 +1725,8 @@ export const PUZZLES = {
  */
 export function calculateEnding(affinityObj) {
   const total = totalAffinity(affinityObj);
-  if (total >= 300) return 'true';
-  if (total >= 150) return 'normal';
+  if (total >= 350) return 'true';
+  if (total >= 200) return 'normal';
   return 'bad';
 }
 

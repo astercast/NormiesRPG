@@ -2,9 +2,24 @@
 const API = 'https://api.normies.art';
 const CACHE = {};
 
+// Abort fetch after 4 s so demo mode never hangs waiting for an unreachable API
+async function fetchWithTimeout(url, ms = 4000) {
+  const ctrl = new AbortController();
+  const tid = setTimeout(() => ctrl.abort(), ms);
+  try {
+    const r = await fetch(url, { signal: ctrl.signal });
+    clearTimeout(tid);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return r;
+  } catch (e) {
+    clearTimeout(tid);
+    throw e;
+  }
+}
+
 export async function fetchNormieMeta(id) {
   if (CACHE[`meta_${id}`]) return CACHE[`meta_${id}`];
-  const r = await fetch(`${API}/normie/${id}/metadata`);
+  const r = await fetchWithTimeout(`${API}/normie/${id}/metadata`);
   const data = await r.json();
   CACHE[`meta_${id}`] = data;
   return data;
@@ -12,10 +27,13 @@ export async function fetchNormieMeta(id) {
 
 export async function fetchNormiePixels(id) {
   if (CACHE[`px_${id}`]) return CACHE[`px_${id}`];
-  const r = await fetch(`${API}/normie/${id}/pixels`);
-  const data = await r.json();
-  CACHE[`px_${id}`] = data;
-  return data;
+  const r = await fetchWithTimeout(`${API}/normie/${id}/pixels`);
+  const raw = await r.json();
+  // Accept any common response shape
+  const pxStr = raw?.pixels || raw?.data || raw?.pixel_string || raw?.pixelString ||
+                (typeof raw === 'string' && raw.length >= 1600 ? raw : null) || '';
+  CACHE[`px_${id}`] = pxStr;
+  return pxStr;
 }
 
 export function calcStats(meta, pixelStr, lv=1) {
@@ -138,21 +156,62 @@ export function makeDemoNormie(id) {
 }
 
 export function makeFakePixels(id) {
-  let bits = '';
-  const s = id*7+3;
-  function rn(i){let v=(s+i)*1664525+1013904223;v&=0x7fffffff;return v/0x7fffffff;}
-  for(let y=0;y<40;y++) for(let x=0;x<40;x++) {
-    const i=y*40+x;
-    const cx=20,cy=18,r=14;
-    const inHead=(x-cx)**2+(y-cy)**2<=r*r;
-    if(!inHead){bits+='0';continue;}
-    const inEyes=(x>11&&x<16&&y>14&&y<18)||(x>24&&x<29&&y>14&&y<18);
-    const inMouth=y>23&&y<26&&x>13&&x<27;
-    const inOutline=(x-cx)**2+(y-cy)**2>=(r-1)**2;
-    if(inOutline||inEyes||inMouth) bits+='1';
-    else bits+=rn(i)<0.18?'1':'0';
+  const W = 40, H = 40;
+  const bits = new Array(W * H).fill('0');
+  const set = (x, y) => { if (x >= 0 && x < W && y >= 0 && y < H) bits[y * W + x] = '1'; };
+  const row = (y, x1, x2) => { for (let x = x1; x <= x2; x++) set(x, y); };
+  const col = (x, y1, y2) => { for (let y = y1; y <= y2; y++) set(x, y); };
+  const border = (x1, y1, x2, y2) => { row(y1,x1,x2); row(y2,x1,x2); col(x1,y1,y2); col(x2,y1,y2); };
+
+  // ── Head outline (rectangular — BFS flood-fill will fill interior as skin) ─
+  border(9, 4, 30, 24);
+
+  // ── Hair (5 styles) ───────────────────────────────────────────────────────
+  switch (id % 5) {
+    case 0: row(3,9,30); row(2,11,28); break;                              // flat crop
+    case 1: row(3,9,30); col(9,1,5); col(10,1,5); break;                  // curtain-left
+    case 2: for(let x=9;x<=30;x+=3){set(x,3);set(x+1,2);} break;         // spiky
+    case 3: row(3,7,32); row(2,8,31); row(1,10,29); break;                // big puff
+    case 4: col(19,1,4); col(20,1,4); set(18,2); set(21,2); break;        // twin horns
   }
-  return bits;
+
+  // ── Eyes (3 shapes) ──────────────────────────────────────────────────────
+  const ey = 11;
+  switch (id % 3) {
+    case 0: border(12,ey,15,ey+2); border(24,ey,27,ey+2); break;           // square
+    case 1: row(ey+1,12,16); row(ey+1,23,27); break;                       // slit
+    case 2: border(11,ey,16,ey+3); border(23,ey,28,ey+3); break;           // large
+  }
+
+  // ── Eyebrows ─────────────────────────────────────────────────────────────
+  switch ((id >> 1) % 3) {
+    case 0: row(ey-2,12,15); row(ey-2,24,27); break;                       // flat
+    case 1: row(ey-2,14,16); set(12,ey-3); set(13,ey-3);
+            row(ey-2,22,24); set(26,ey-3); set(27,ey-3); break;            // arched
+    case 2: row(ey-2,12,14); set(15,ey-3);
+            row(ey-2,25,27); set(24,ey-3); break;                          // angled angry
+  }
+
+  // ── Nose ─────────────────────────────────────────────────────────────────
+  set(19, 16); set(20, 16);
+
+  // ── Mouth (4 expressions) ────────────────────────────────────────────────
+  const mouthY = 20;
+  switch (id % 4) {
+    case 0: row(mouthY,13,26); set(12,mouthY-1); set(27,mouthY-1); break;  // smile
+    case 1: row(mouthY,14,25); break;                                       // neutral
+    case 2: row(mouthY,13,26); row(mouthY+1,14,25); break;                 // open happy
+    case 3: row(mouthY,17,22); set(23,mouthY-1); break;                    // smirk
+  }
+
+  // ── Neck (2 columns each side, rows 25-27) ───────────────────────────────
+  col(15,25,27); col(16,25,27); col(23,25,27); col(24,25,27);
+
+  // ── Body / shirt (closed rectangle so BFS fills interior correctly) ──────
+  border(7, 28, 32, 37);
+  row(30, 8, 31); // collar/shirt crease
+
+  return bits.join('');
 }
 
 // XP required for each level
