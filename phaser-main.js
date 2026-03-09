@@ -1163,27 +1163,29 @@ function buildRuinsMap() {
 
 // 20Ã—14 bedroom / home interior.  Player wakes here; exit south â†’ town.
 function buildHomeMap() {
-  const W = 20, H = 14;
+  const W = 32, H = 22;
   const map = Array.from({ length: H }, () => Array(W).fill(TID.FLOOR));
   // Outer walls
   for (let x = 0; x < W; x++) { map[0][x] = TID.WALL; map[H-1][x] = TID.WALL; }
   for (let y = 0; y < H; y++) { map[y][0] = TID.WALL; map[y][W-1] = TID.WALL; }
-  // South exit gap (3 tiles wide, centred)
-  for (let x = 8; x <= 11; x++) map[H-1][x] = TID.PATH;
+  // South exit gap (4 tiles wide, centred)
+  for (let x = 14; x <= 17; x++) map[H-1][x] = TID.PATH;
   // Bed (top-left nook)
-  fillBlock(map, 2, 1, 5, 4, TID.DARK, TID.DARK);
-  // Kitchen counter (top-right)
-  for (let x = 13; x <= 17; x++) map[2][x] = TID.DARK;
+  fillBlock(map, 2, 1, 7, 6, TID.DARK, TID.DARK);
+  // Desk (top-right)
+  for (let x = 22; x <= 28; x++) { map[2][x] = TID.DARK; map[3][x] = TID.DARK; }
+  // Kitchen counter (right side wall)
+  for (let y = 8; y <= 14; y++) map[y][W-2] = TID.DARK;
   return map;
 }
 
 const MAP_DEFS = {
   home: {
-    w: 20, h: 14,
+    w: 32, h: 22,
     ground: buildHomeMap(),
-    spawn: { spawn: { col: 10, row: 8 } },
-    warps:      [{ col: 8, row: 13, cols: 4, rows: 1, targetMap: 'town', targetSpawn: 'from_overworld' }],
-    npcs:       [{ id: 'mom_up', col: 15, row: 5 }],
+    spawn: { spawn: { col: 10, row: 11 } },
+    warps:      [{ col: 14, row: 21, cols: 4, rows: 1, targetMap: 'town', targetSpawn: 'from_overworld' }],
+    npcs:       [{ id: 'mom_up', col: 13, row: 11 }],
     encounters: [],
     bosses:     [],
   },
@@ -1457,6 +1459,7 @@ class OverworldScene extends Phaser.Scene {
     this.map = null;
     this.tileset = null;
     this.groundLayer = null;
+    this.groundCollider = null; // stored so we can destroy it on map change
     this.collisionLayer = null;
     this.player = null;
     this.npcs = [];
@@ -1570,6 +1573,8 @@ class OverworldScene extends Phaser.Scene {
     this.warps = [];
     this.encounters = [];
     this.bosses = [];
+    // Destroy collider before destroying the layer — prevents stale collider accumulation
+    if (this.groundCollider) { this.groundCollider.destroy(); this.groundCollider = null; }
     this.groundLayer?.destroy();
     this.collisionLayer?.destroy();
     this.map?.destroy();
@@ -1593,7 +1598,7 @@ class OverworldScene extends Phaser.Scene {
     this.groundLayer = this.map.createLayer(0, this.tileset, 0, 0).setScale(2);
     this.collisionLayer = null; // single-layer; border tiles (index 3) handle collision
     this.groundLayer.setCollisionBetween(3, 3);
-    this.physics.add.collider(this.player, this.groundLayer);
+    this.groundCollider = this.physics.add.collider(this.player, this.groundLayer);
 
     // World size: tile 16px Ã— scale 2 = 32 world-px per tile
     const mapW = mdef.w * 32;
@@ -1758,14 +1763,14 @@ class OverworldScene extends Phaser.Scene {
   }
 
   update(_, delta) {
-    // Failsafe unlock: once the launch overlay is dismissed and no panel is open,
-    // movement must be free regardless of any missed bus event.
-    if (this.overlayLocked &&
-        ui.launchOverlay?.classList.contains('hidden') &&
-        ui.dialogue.classList.contains('hidden') &&
-        !menuOpen && !shopOpen) {
-      this.overlayLocked = false;
-    }
+    // Recompute lock state from DOM truth every frame — can never get stuck.
+    // Battle lock is handled via scene.pause() / scene.resume() instead.
+    this.overlayLocked = (
+      !ui.launchOverlay?.classList.contains('hidden') ||
+      !ui.dialogue.classList.contains('hidden') ||
+      menuOpen ||
+      shopOpen
+    );
 
     const interactPressed = this.keys.E.isDown;
     const menuPressed = this.keys.I.isDown;
