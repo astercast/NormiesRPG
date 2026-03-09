@@ -8,32 +8,29 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js"></script>
-  <script type="module" crossorigin src="./assets/main-BSWo1dZv.js"></script>
-  <link rel="stylesheet" crossorigin href="./assets/main-BbNPoimT.css">
+  <script type="module" crossorigin src="./assets/main-D4KQp6sF.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/main-DIUT5VB5.css">
 </head>
 <body class="prelaunch">
   <div id="launch-overlay" class="launch-overlay">
-    <div class="launch-card">
-      <div class="launch-topline">
-        <a class="launch-site" href="https://normies.art" target="_blank" rel="noopener noreferrer">normies.art</a>
-        <button id="btn-theme-toggle-launch" class="btn alt">Light UI</button>
-      </div>
-      <p class="launch-kicker">Normies On-Chain Adventure</p>
-      <h1 class="launch-title">Normies RPG</h1>
-      <p class="launch-subtitle">Pick your wallet, load your owned Normies, and jump straight into the monochrome warzone.</p>
+    <div class="launch-center">
+      <p class="launch-kicker">YOUR NORMIES. THEIR ADVENTURE.</p>
+      <h1 class="launch-title">NORMIES RPG</h1>
 
-      <div class="wallet-picker-head">
-        <span>Wallet Selection</span>
-        <button id="btn-wallet-refresh" class="btn alt">Refresh List</button>
-      </div>
+      <!-- Wallet provider list, populated by JS -->
       <div id="wallet-picker" class="wallet-picker"></div>
 
       <div class="launch-actions">
-        <button id="btn-launch-wallet" class="btn" disabled>Connect Selected Wallet</button>
-        <button id="btn-launch-demo" class="btn alt">Start In Demo Mode</button>
+        <button id="btn-launch-wallet" class="btn-pw btn-pw-primary" disabled>Connect Wallet</button>
+        <button id="btn-launch-demo" class="btn-pw btn-pw-secondary">Play Demo</button>
       </div>
-      <p id="launch-status" class="launch-status">Choose a wallet provider to continue, or start demo mode.</p>
+
+      <p id="launch-status" class="launch-disclaimer">Read-only &middot; no signing required &middot; demo uses real Normies from the collection</p>
     </div>
+
+    <!-- hidden utility buttons kept for JS event bindings -->
+    <button id="btn-wallet-refresh" class="launch-hidden">Refresh</button>
+    <button id="btn-theme-toggle-launch" class="launch-hidden">Light UI</button>
   </div>
 
   <div class="wallet-bar">

@@ -94,147 +94,133 @@ body.prelaunch .quest-banner {
   pointer-events: none;
 }
 
-/* ── Launch Overlay ──────────────────────── */
+/* ── Launch Overlay (NormDorm-style) ─────── */
 .launch-overlay {
   position: fixed;
   inset: 0;
   z-index: 60;
-  display: grid;
-  place-items: center;
-  background: var(--shell-scrim);
-  padding: 20px;
-}
-
-.launch-card {
-  width: min(900px, 96vw);
-  border: 1px solid var(--shell-line-hi);
-  background: var(--shell-card);
-  box-shadow: 0 32px 90px rgba(0, 0, 0, 0.6);
-  padding: 30px 36px;
-  animation: riseIn 260ms ease-out;
-}
-
-.launch-topline {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-bottom: 14px;
+  justify-content: center;
+  background: #000000;
 }
 
-.launch-site {
-  color: var(--shell-muted);
-  text-decoration: none;
-  font-size: 11px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  border: 1px solid var(--shell-line);
-  padding: 4px 8px;
-  transition: color 110ms, border-color 110ms;
-}
+.launch-hidden { display: none !important; }
 
-.launch-site:hover {
-  color: var(--shell-text);
-  border-color: var(--shell-line-hi);
+.launch-center {
+  text-align: center;
+  max-width: 680px;
+  width: 100%;
+  padding: 24px;
 }
 
 .launch-kicker {
-  margin: 0 0 4px;
+  margin: 0 0 10px;
   font-size: 11px;
   text-transform: uppercase;
-  letter-spacing: 0.18em;
-  color: var(--shell-muted);
+  letter-spacing: 0.22em;
+  color: #666666;
 }
 
 .launch-title {
-  margin: 0 0 8px;
-  font-size: clamp(44px, 7vw, 78px);
-  line-height: 0.90;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-  color: var(--shell-text);
+  margin: 0 0 44px;
   font-family: "Bebas Neue", sans-serif;
+  font-size: clamp(72px, 13vw, 130px);
+  line-height: 0.88;
+  letter-spacing: 0.02em;
+  color: #ffffff;
 }
 
-.launch-subtitle {
-  margin: 0 0 22px;
-  max-width: 66ch;
-  font-size: 14px;
-  line-height: 1.6;
-  color: var(--shell-muted);
-}
-
-/* ── Wallet Picker ── */
-.wallet-picker-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 10px;
-  padding-top: 18px;
-  border-top: 1px solid var(--shell-line);
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  color: var(--shell-muted);
-}
-
+/* ── Wallet Picker (appears above CTA buttons) ── */
 .wallet-picker {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: 8px;
+  justify-content: center;
+  margin-bottom: 20px;
 }
 
 .wallet-choice {
-  border: 1px solid var(--shell-line);
+  border: 1px solid rgba(255, 255, 255, 0.22);
   background: transparent;
-  color: var(--shell-text);
+  color: #ffffff;
   text-align: left;
-  padding: 12px 14px;
+  padding: 10px 14px;
   cursor: pointer;
   font-family: inherit;
   transition: border-color 110ms, background 110ms;
+  min-width: 160px;
 }
 
-.wallet-choice:hover { border-color: var(--shell-line-hi); }
+.wallet-choice:hover { border-color: rgba(255, 255, 255, 0.55); }
 
 .wallet-choice.active {
-  border-color: var(--shell-text);
-  background: color-mix(in srgb, var(--shell-btn) 70%, var(--shell-text) 10%);
+  border-color: #ffffff;
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .wallet-choice-name {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   display: block;
-  margin-bottom: 3px;
+  margin-bottom: 2px;
 }
 
 .wallet-choice-tag {
-  font-size: 11px;
-  color: var(--shell-muted);
+  font-size: 10px;
+  color: #666666;
 }
 
 .wallet-empty {
-  grid-column: 1 / -1;
-  border: 1px dashed var(--shell-line);
-  padding: 14px;
-  color: var(--shell-muted);
-  font-size: 12px;
+  font-size: 11px;
+  color: #555555;
+  letter-spacing: 0.04em;
+  padding: 4px 0 12px;
+  width: 100%;
 }
 
+/* ── CTA Buttons ── */
 .launch-actions {
   display: flex;
-  gap: 10px;
+  gap: 12px;
+  justify-content: center;
   flex-wrap: wrap;
-  margin-top: 20px;
-  padding-top: 18px;
-  border-top: 1px solid var(--shell-line);
+  margin-bottom: 24px;
 }
 
-.launch-status {
-  margin: 10px 0 0;
-  min-height: 16px;
+.btn-pw {
+  padding: 15px 38px;
+  font-family: "Space Grotesk", sans-serif;
   font-size: 12px;
-  color: var(--shell-muted);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  min-width: 190px;
+  transition: opacity 110ms;
+}
+
+.btn-pw:disabled { opacity: 0.32; cursor: not-allowed; }
+.btn-pw:not(:disabled):hover { opacity: 0.82; }
+
+.btn-pw-primary {
+  background: #ffffff;
+  color: #000000;
+  border: 2px solid #ffffff;
+}
+
+.btn-pw-secondary {
+  background: transparent;
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.32);
+}
+
+.launch-disclaimer {
+  margin: 0;
+  font-size: 11px;
+  color: #444444;
+  letter-spacing: 0.03em;
+  line-height: 1.6;
 }
 
 /* ── Wallet Bar ──────────────────────────── */

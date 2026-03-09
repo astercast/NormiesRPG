@@ -719,13 +719,12 @@ class BootScene extends Phaser.Scene {
   }
 
   generateTileTexture() {
-    const cv = document.createElement('canvas');
-    cv.width = 128;
-    cv.height = 128;
-    const ctx = cv.getContext('2d');
+    // Use Phaser's createCanvas API so the texture is properly uploaded to
+    // the GPU (calling refresh() does an explicit WebGL texture update).
+    const ct = this.textures.createCanvas(ART_KEYS.tiles, 128, 128);
+    const ctx = ct.context;
     const S = 32;
 
-    // Draw a tile with a base fill, optional dot detail, and optional grid edge lines.
     const tile = (tx, ty, base, detail, grid) => {
       const x = tx * S; const y = ty * S;
       ctx.fillStyle = base;
@@ -743,27 +742,19 @@ class BootScene extends Phaser.Scene {
       }
     };
 
-    // Row 0 — outdoor ground tiles (tile IDs 1-4)
-    // ID 1: main outdoor floor — bright so the overworld is always visible
-    tile(0, 0, '#b4bec0', '#c8d2d4', '#9eaaac');
-    // ID 2: slightly darker outdoor
+    // Row 0 — outdoor ground tiles (IDs 1-4)
+    tile(0, 0, '#b4bec0', '#c8d2d4', '#9eaaac'); // ID 1 – overworld main floor
     tile(1, 0, '#8a989c', '#9aacb0', '#7a8890');
-    // ID 3: path / stone
     tile(2, 0, '#6a7478', '#7a8488', '#5a666a');
-    // ID 4: dark stone / wall
     tile(3, 0, '#2a3038', '#343c44', '#1e262e');
 
-    // Row 1 — indoor / town floor tiles (tile IDs 5-8)
-    // ID 5: main indoor floor — bright stone, used throughout town
-    tile(0, 1, '#c0cac8', '#d0d8d6', '#a8b4b2');
-    // ID 6: slightly darker indoor stone
+    // Row 1 — indoor / town tiles (IDs 5-8)
+    tile(0, 1, '#c0cac8', '#d0d8d6', '#a8b4b2'); // ID 5 – town main floor
     tile(1, 1, '#848e8c', '#949e9c', '#747e7c');
-    // ID 7: dungeon / ruin floor
     tile(2, 1, '#484e54', '#585e64', '#383e44');
-    // ID 8: bright highlight / special
     tile(3, 1, '#dce4e4', '#eaf0f0', '#c8d0d0');
 
-    // Row 2 — wall / decoration tiles (IDs 9-12)
+    // Row 2 — walls (IDs 9-12)
     tile(0, 2, '#1a2028', '#242a32', '#121820');
     tile(1, 2, '#243038', '#2e3c44', '#18242c');
     tile(2, 2, '#303840', '#3c444c', '#242c34');
@@ -775,152 +766,127 @@ class BootScene extends Phaser.Scene {
     tile(2, 3, '#10181e', '#181e26', '#0c1016');
     tile(3, 3, '#e8e8e8', '#f4f4f4', '#cccccc');
 
-    this.textures.addCanvas(ART_KEYS.tiles, cv);
+    ct.refresh();
   }
 
   generatePlayerSheet() {
-    const cv = document.createElement('canvas');
-    cv.width = 96;
-    cv.height = 128;
-    const ctx = cv.getContext('2d');
+    const ct = this.textures.createCanvas(ART_KEYS.player, 96, 128);
+    const ctx = ct.context;
 
-    const drawFrame = (col, row, legL = 0, legR = 0, facing = 'down') => {
+    const drawFrame = (col, row, legL = 0, legR = 0) => {
       const x = col * 32;
       const y = row * 32;
 
-      // Drop shadow
       ctx.fillStyle = 'rgba(0,0,0,0.28)';
       ctx.fillRect(x + 10, y + 29, 12, 2);
 
-      // Legs
       ctx.fillStyle = '#8090a0';
       ctx.fillRect(x + 12, y + 22, 4, 7 + legL);
       ctx.fillRect(x + 16, y + 22, 4, 7 + legR);
-      // Leg boots
       ctx.fillStyle = '#404850';
       ctx.fillRect(x + 12, y + 26 + legL, 4, 3);
       ctx.fillRect(x + 16, y + 26 + legR, 4, 3);
 
-      // Body outline
       ctx.fillStyle = '#1e242a';
       ctx.fillRect(x + 9, y + 11, 14, 12);
-      // Body fill — armor
       ctx.fillStyle = '#606870';
       ctx.fillRect(x + 10, y + 12, 12, 10);
-      // Chest highlight
       ctx.fillStyle = '#8090a0';
       ctx.fillRect(x + 11, y + 13, 4, 4);
 
-      // Arms
       ctx.fillStyle = '#606870';
       ctx.fillRect(x + 6, y + 12, 4, 6);
       ctx.fillRect(x + 22, y + 12, 4, 6);
 
-      // Head outline
       ctx.fillStyle = '#1e242a';
       ctx.fillRect(x + 10, y + 3, 12, 10);
-      // Head fill
       ctx.fillStyle = '#d4d8dc';
       ctx.fillRect(x + 11, y + 4, 10, 8);
-      // Visor / eye strip
       ctx.fillStyle = '#1a2028';
       ctx.fillRect(x + 11, y + 6, 10, 3);
-      // Visor glow — eye holes
       ctx.fillStyle = '#c8e8ff';
       ctx.fillRect(x + 12, y + 7, 3, 1);
       ctx.fillRect(x + 17, y + 7, 3, 1);
     };
 
-    // 4 directions × 3 animation frames
     for (let row = 0; row < 4; row += 1) {
       drawFrame(0, row, 0, 0);
       drawFrame(1, row, 3, -1);
       drawFrame(2, row, -1, 3);
     }
 
-    this.textures.addSpriteSheet(ART_KEYS.player, cv, { frameWidth: 32, frameHeight: 32 });
+    ct.refresh();
+    // Add numbered frames (3 cols × 4 rows = 12 frames)
+    for (let i = 0; i < 12; i += 1) {
+      ct.add(i, 0, (i % 3) * 32, Math.floor(i / 3) * 32, 32, 32);
+    }
   }
 
   generateNpcSheet() {
-    const cv = document.createElement('canvas');
-    cv.width = 96;
-    cv.height = 32;
-    const ctx = cv.getContext('2d');
+    const ct = this.textures.createCanvas(ART_KEYS.npc, 96, 32);
+    const ctx = ct.context;
 
     for (let i = 0; i < 3; i += 1) {
       const x = i * 32;
       const bob = i === 1 ? -1 : 0;
 
-      // Cloak body (friendly warm tone)
       ctx.fillStyle = '#1e2a22';
       ctx.fillRect(x + 8, 13 + bob, 16, 14);
       ctx.fillStyle = '#3a5040';
       ctx.fillRect(x + 9, 14 + bob, 14, 12);
 
-      // Head outline
       ctx.fillStyle = '#1e2420';
       ctx.fillRect(x + 10, 3 + bob, 12, 11);
-      // Face
       ctx.fillStyle = '#c8b8a0';
       ctx.fillRect(x + 11, 4 + bob, 10, 9);
-      // Eyes
       ctx.fillStyle = '#201c18';
       ctx.fillRect(x + 13, 6 + bob, 2, 2);
       ctx.fillRect(x + 17, 6 + bob, 2, 2);
-      // Hood
       ctx.fillStyle = '#2a3828';
       ctx.fillRect(x + 10, 3 + bob, 12, 3);
 
-      // Staff / walking stick
       ctx.fillStyle = '#8a6840';
       ctx.fillRect(x + 22, 8 + bob, 2, 18);
     }
 
-    this.textures.addSpriteSheet(ART_KEYS.npc, cv, { frameWidth: 32, frameHeight: 32 });
+    ct.refresh();
+    for (let i = 0; i < 3; i += 1) ct.add(i, 0, i * 32, 0, 32, 32);
   }
 
   generateEnemySheet() {
-    const cv = document.createElement('canvas');
-    cv.width = 96;
-    cv.height = 32;
-    const ctx = cv.getContext('2d');
+    const ct = this.textures.createCanvas(ART_KEYS.enemy, 96, 32);
+    const ctx = ct.context;
 
     for (let i = 0; i < 3; i += 1) {
       const x = i * 32;
       const pulse = i === 1 ? -1 : (i === 2 ? 1 : 0);
 
-      // Tendrils / appendages
       ctx.fillStyle = '#1e0e18';
       ctx.fillRect(x + 4, 14 + pulse, 4, 10);
       ctx.fillRect(x + 24, 14 + pulse, 4, 10);
 
-      // Body shadow
       ctx.fillStyle = '#120a10';
       ctx.fillRect(x + 6, 8 + pulse, 20, 18);
-      // Body fill
       ctx.fillStyle = '#2a1828';
       ctx.fillRect(x + 7, 9 + pulse, 18, 16);
-      // Body shimmer
       ctx.fillStyle = '#3c2438';
       ctx.fillRect(x + 9, 10 + pulse, 6, 8);
 
-      // Head
       ctx.fillStyle = '#1a0e18';
       ctx.fillRect(x + 9, 3 + pulse, 14, 10);
       ctx.fillStyle = '#301828';
       ctx.fillRect(x + 10, 4 + pulse, 12, 8);
 
-      // Glowing eyes — white/bright so always visible
       ctx.fillStyle = '#f0f8ff';
       ctx.fillRect(x + 11, 6 + pulse, 4, 3);
       ctx.fillRect(x + 17, 6 + pulse, 4, 3);
-      // Eye pupils
       ctx.fillStyle = '#60b8ff';
       ctx.fillRect(x + 12, 7 + pulse, 2, 1);
       ctx.fillRect(x + 18, 7 + pulse, 2, 1);
     }
 
-    this.textures.addSpriteSheet(ART_KEYS.enemy, cv, { frameWidth: 32, frameHeight: 32 });
+    ct.refresh();
+    for (let i = 0; i < 3; i += 1) ct.add(i, 0, i * 32, 0, 32, 32);
   }
 
   createAnimations() {
@@ -1041,6 +1007,10 @@ class OverworldScene extends Phaser.Scene {
 
     this.map = this.make.tilemap({ key: mapId });
     this.tileset = this.map.addTilesetImage('generated-tileset', ART_KEYS.tiles, 32, 32, 0, 0, 1);
+    if (!this.tileset) {
+      console.error('[PixelWar] addTilesetImage returned null — texture key:', ART_KEYS.tiles);
+      return;
+    }
 
     this.groundLayer = this.map.createLayer('ground', this.tileset, 0, 0).setScale(2);
     this.collisionLayer = this.map.createLayer('collision', this.tileset, 0, 0).setScale(2).setVisible(false);
@@ -1468,7 +1438,7 @@ window.addEventListener('keydown', (e) => {
 });
 
 gameRef = new Phaser.Game({
-  type: Phaser.WEBGL,
+  type: Phaser.AUTO,
   parent: 'game-root',
   width: window.innerWidth,
   height: window.innerHeight,
