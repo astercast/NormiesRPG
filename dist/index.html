@@ -8,8 +8,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js"></script>
-  <script type="module" crossorigin src="./assets/main-C79p8iDb.js"></script>
-  <link rel="stylesheet" crossorigin href="./assets/main-88Bxlozx.css">
+  <script type="module" crossorigin src="./assets/main-BC92EqAU.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/main-DQxaZN99.css">
 </head>
 <body class="prelaunch">
   <div id="launch-overlay" class="launch-overlay">
@@ -26,6 +26,12 @@
       </div>
 
       <p id="launch-status" class="launch-disclaimer">Read-only &middot; no signing required &middot; demo uses real Normies from the collection</p>
+
+      <!-- Normie picker — shown after wallet connects -->
+      <div id="normie-select-screen" class="hidden">
+        <p class="launch-kicker" id="normie-select-status">Choose your Normie.</p>
+        <div id="normie-select-grid" class="normie-select-grid"></div>
+      </div>
     </div>
 
     <!-- hidden utility buttons kept for JS event bindings -->

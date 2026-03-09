@@ -223,6 +223,56 @@ body.prelaunch .quest-banner {
   line-height: 1.6;
 }
 
+/* ── Normie Picker (post-wallet-connect) ───────── */
+.normie-select-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 10px;
+  margin-top: 20px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.normie-card {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.14);
+  color: #ffffff;
+  padding: 14px 12px;
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color 100ms, background 100ms;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.normie-card:hover {
+  border-color: rgba(255,255,255,0.55);
+  background: rgba(255,255,255,0.08);
+}
+
+.nc-name {
+  font-size: 13px;
+  font-weight: 700;
+  display: block;
+}
+
+.nc-type {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #888888;
+  display: block;
+}
+
+.nc-stat {
+  font-size: 11px;
+  color: #aaaaaa;
+  display: block;
+  margin-top: 4px;
+}
+
 /* ── Wallet Bar ──────────────────────────── */
 .wallet-bar {
   position: fixed;

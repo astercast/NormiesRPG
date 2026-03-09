@@ -1,5 +1,7 @@
 import Phaser from 'phaser';
 import { connectWallet, loadWalletNormies, loadDemoNormies, detectWallets } from './wallet.js';
+import { makeDemoNormie, fetchNormieFull } from './normie-api.js';
+import kenneyTilesUrl from './assets/art/tileset/kenney_mono_packed.png';
 
 const bus = new Phaser.Events.EventEmitter();
 
@@ -110,6 +112,9 @@ const STATE = {
 };
 
 const ui = {
+  normieSelectScreen: document.getElementById('normie-select-screen'),
+  normieSelectGrid: document.getElementById('normie-select-grid'),
+  normieSelectStatus: document.getElementById('normie-select-status'),
   launchOverlay: document.getElementById('launch-overlay'),
   launchStatus: document.getElementById('launch-status'),
   walletPicker: document.getElementById('wallet-picker'),
@@ -464,12 +469,20 @@ function partyTintByType(type) {
 function renderPartyMenu() {
   const lead = leadNormie();
   const rows = [];
-  rows.push('<div class="panel-row"><span>Party (click Set Lead for battle avatar/stat baseline)</span><span></span></div>');
+  rows.push('<div class="panel-row"><span>Your party grows as you explore and complete quests.</span><span></span></div>');
 
-  STATE.party.roster.slice(0, 5).forEach((n) => {
+  STATE.party.roster.forEach((n) => {
     const isLead = lead?.id === n.id;
-    rows.push(`<div class="panel-row"><span>${n.name} · ${n.type} · HP ${n.maxHp} · Basic ${n.atkBasic}</span><span><button class="btn alt" data-lead="${n.id}">${isLead ? 'Lead' : 'Set Lead'}</button></span></div>`);
+    const tag = isLead ? 'LEAD' : 'Companion';
+    rows.push(`<div class="panel-row"><span>${n.name} · ${n.type} · HP ${n.maxHp} · ATK ${n.atkBasic}</span><span><button class="btn alt" data-lead="${n.id}">${tag}</button></span></div>`);
   });
+
+  if (STATE.party.roster.length < 5) {
+    for (let i = STATE.party.roster.length; i < 5; i++) {
+      rows.push('<div class="panel-row" style="opacity:.38"><span>Empty slot — find a companion in the world</span><span></span></div>');
+    }
+  }
+
   ui.partyBody.innerHTML = rows.join('');
 
   ui.partyBody.querySelectorAll('[data-lead]').forEach((btn) => {
@@ -877,8 +890,8 @@ class BootScene extends Phaser.Scene {
 
   preload() {
     // Maps are defined inline in MAP_DEFS — no JSON files to load.
-    // Load the real Kenney 1-bit monochrome tileset (48 cols × 22 rows, 16×16 px each).
-    this.load.image(ART_KEYS.tiles, 'assets/art/tileset/kenney_mono_packed.png');
+    // Import keeps Vite's asset pipeline happy so the PNG is copied to dist.
+    this.load.image(ART_KEYS.tiles, kenneyTilesUrl);
     this.load.spritesheet(ART_KEYS.player, buildPlayerCanvas().toDataURL(), { frameWidth: 32, frameHeight: 32 });
     this.load.spritesheet(ART_KEYS.npc,    buildNpcCanvas().toDataURL(),    { frameWidth: 32, frameHeight: 32 });
     this.load.spritesheet(ART_KEYS.enemy,  buildEnemyCanvas().toDataURL(),  { frameWidth: 32, frameHeight: 32 });
@@ -1366,10 +1379,18 @@ class BattleScene extends Phaser.Scene {
 }
 
 async function hydrateDemoParty() {
-  updateWalletStatus('Loading demo Normies...');
-  const normies = await loadDemoNormies();
-  STATE.party.roster = normies.slice(0, 5);
-  STATE.party.leadId = STATE.party.roster[0]?.id || null;
+  // Pick one random Normie instantly (no network) so the game starts immediately.
+  const DEMO_IDS = [1, 7, 42, 100, 256, 420, 888, 1000, 1337, 2000, 3000, 3333, 4000, 5000, 6000];
+  const randomId = DEMO_IDS[Math.floor(Math.random() * DEMO_IDS.length)];
+  let normie;
+  setLaunchStatus('Loading your Normie...');
+  try {
+    normie = await fetchNormieFull(randomId);
+  } catch {
+    normie = makeDemoNormie(randomId);
+  }
+  STATE.party.roster = [normie];
+  STATE.party.leadId = normie.id;
   STATE.identity.mode = 'demo';
   STATE.identity.walletAddress = null;
   STATE.identity.walletName = 'Demo';
@@ -1385,37 +1406,65 @@ async function hydrateWalletParty(providerId = null) {
   setLaunchStatus('Connecting wallet...');
   try {
     const { provider, address, walletName } = await connectWallet(providerId);
-    updateWalletStatus('Loading owned Normies...');
-    setLaunchStatus('Loading owned Normies...');
+    setLaunchStatus('Loading your Normies...');
     const owned = await loadWalletNormies(address, provider);
 
     if (!owned.length) {
-      showDialogue('Wallet', 'No Normies found in wallet. Switching to demo party for now.');
+      showDialogue('Wallet', 'No Normies found in this wallet. Starting demo mode.');
       await hydrateDemoParty();
       exitLaunchOverlay();
       return;
     }
 
-    STATE.party.roster = owned.slice(0, 5);
-    STATE.party.leadId = STATE.party.roster[0].id;
-    STATE.identity.mode = 'wallet';
-    STATE.identity.walletAddress = address;
-    STATE.identity.walletName = walletName;
-    applyLeadNormieStats();
-    buildLeadNormieTexture();
-    updateWalletStatus();
-    setLaunchStatus(`Connected ${walletName}: ${shortAddr(address)}.`);
-    updateHud();
-    bus.emit('state-reloaded');
-    exitLaunchOverlay();
-
-    // Auto attempt load from wallet slot so progression follows wallet identity.
-    await loadCloud();
+    // Show normie picker — player chooses exactly 1.
+    showNormiePicker(owned, (chosen) => {
+      STATE.party.roster = [chosen];
+      STATE.party.leadId = chosen.id;
+      STATE.identity.mode = 'wallet';
+      STATE.identity.walletAddress = address;
+      STATE.identity.walletName = walletName;
+      applyLeadNormieStats();
+      buildLeadNormieTexture();
+      updateWalletStatus();
+      setLaunchStatus(`Playing as ${chosen.name}.`);
+      updateHud();
+      bus.emit('state-reloaded');
+      exitLaunchOverlay();
+      loadCloud();
+    });
   } catch (err) {
     const message = walletErrorMessage(err);
     updateWalletStatus(message);
     setLaunchStatus(message);
   }
+}
+
+function showNormiePicker(normies, onPick) {
+  if (!ui.normieSelectScreen || !ui.normieSelectGrid) return;
+
+  // Swap launch center content for normie select screen.
+  const center = ui.normieSelectScreen.closest('.launch-center');
+  center?.querySelectorAll('.launch-kicker, .launch-title, .wallet-picker, .launch-actions, .launch-disclaimer')
+    .forEach((el) => el.classList.add('launch-hidden'));
+  ui.normieSelectScreen.classList.remove('hidden');
+
+  if (ui.normieSelectStatus) ui.normieSelectStatus.textContent = 'Choose your Normie. Party members join during your adventure.';
+
+  ui.normieSelectGrid.innerHTML = normies.map((n) => `
+    <button class="normie-card" data-id="${n.id}" type="button">
+      <span class="nc-name">${n.name}</span>
+      <span class="nc-type">${n.type}</span>
+      <span class="nc-stat">HP ${n.maxHp} &middot; ATK ${n.atkBasic}</span>
+    </button>
+  `).join('');
+
+  ui.normieSelectGrid.querySelectorAll('.normie-card').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const id = Number(btn.dataset.id);
+      const chosen = normies.find((n) => n.id === id);
+      if (chosen) onPick(chosen);
+    });
+  });
 }
 
 async function launchDemoMode() {
